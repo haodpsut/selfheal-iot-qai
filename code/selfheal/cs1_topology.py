@@ -119,14 +119,13 @@ def _giant_fraction(n_nodes: int, alive: np.ndarray, edges: np.ndarray) -> float
     return counts.max() / roots.size
 
 
-def _survivable_fraction(n_nodes: int, alive: np.ndarray, edges: np.ndarray) -> float:
-    """Largest *2-edge-connected* component as a fraction of alive nodes.
+def _two_edge_components(n_nodes: int, alive: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    """Label each node by its 2-edge-connected component (bridges removed).
 
-    A 2-edge-connected component survives ANY single link failure without splitting, so
-    this is the resilience-relevant target: not merely 'connected now' but 'still connected
-    after the next failure'. We find bridges via iterative Tarjan, remove them, and return
-    the size of the largest surviving component. Growing this core requires adding *cycles*
-    (redundancy), which is exactly where myopic greedy struggles.
+    Bridges are found by an iterative Tarjan traversal; removing them splits the graph into
+    its 2-edge-connected components, each of which survives ANY single link failure without
+    splitting. Returns a length-n_nodes array of component roots (a union-find label). Shared
+    by both case studies' resilience metrics.
     """
     from collections import defaultdict
 
@@ -171,7 +170,6 @@ def _survivable_fraction(n_nodes: int, alive: np.ndarray, edges: np.ndarray) -> 
                     if low[node] > disc[parent]:
                         bridges.add(pedge)
 
-    # Remove bridges, then the largest connected component is the survivable core.
     parent = np.arange(n_nodes)
 
     def find2(a):
@@ -186,8 +184,13 @@ def _survivable_fraction(n_nodes: int, alive: np.ndarray, edges: np.ndarray) -> 
         ru, rv = find2(u), find2(v)
         if ru != rv:
             parent[ru] = rv
+    return np.array([find2(i) for i in range(n_nodes)])
 
-    roots = np.array([find2(int(i)) for i in np.where(alive)[0]])
+
+def _survivable_fraction(n_nodes: int, alive: np.ndarray, edges: np.ndarray) -> float:
+    """Largest 2-edge-connected component as a fraction of alive nodes (CS1 objective)."""
+    comp = _two_edge_components(n_nodes, alive, edges)
+    roots = comp[np.where(alive)[0]]
     if roots.size == 0:
         return 0.0
     _, counts = np.unique(roots, return_counts=True)
@@ -248,6 +251,18 @@ def _resilience_conn(n_nodes: int, alive: np.ndarray, edges: np.ndarray, w: floa
     g = _giant_fraction(n_nodes, alive, edges)
     lam = _algebraic_connectivity(n_nodes, alive, edges)
     return g + w * lam
+
+
+# Eigensolve-free objectives for the greedy baselines, so greedy stays cheap at scale (the
+# population solvers below still optimize the full survivable + w*lambda2 resilience).
+def _resilience_surv(n_nodes: int, alive: np.ndarray, edges: np.ndarray, w: float = W_LAMBDA) -> float:
+    """Survivability only (naive greedy): stalls once the graph is merely connected."""
+    return _survivable_fraction(n_nodes, alive, edges)
+
+
+def _resilience_giant_surv(n_nodes: int, alive: np.ndarray, edges: np.ndarray, w: float = W_LAMBDA) -> float:
+    """Connectivity-first, eigensolve-free (stronger greedy): giant + survivable fraction."""
+    return _giant_fraction(n_nodes, alive, edges) + _survivable_fraction(n_nodes, alive, edges)
 
 
 def make_fitness(sc: Scenario, energy_pref: float = 0.01, w: float = W_LAMBDA):
@@ -334,25 +349,34 @@ def ai_prior(sc: Scenario) -> np.ndarray:
 # --------------------------------------------------------------------------------------
 # Baselines
 # --------------------------------------------------------------------------------------
-def greedy(sc: Scenario, obj=_resilience, w: float = W_LAMBDA):
+def greedy(sc: Scenario, obj=_resilience, w: float = W_LAMBDA, sample: int = 256, seed: int = 0):
     """Add the candidate edge with the best marginal objective gain per energy, until the
     budget is exhausted or no edge improves the score. The myopic baseline. `obj` selects
-    which objective it climbs: `_resilience` (true worst-case target) or `_resilience_conn`
-    (a friendlier connectivity-first surrogate, to give greedy its strongest chance)."""
+    which objective it climbs: `_resilience` (worst-case target) or a connectivity-first
+    surrogate (to give greedy its strongest chance).
+
+    For scalability this is the *stochastic greedy* variant (Mirzasoleiman et al.): each step
+    scores a random subset of `sample` affordable candidates rather than all of them, which
+    preserves near-greedy quality at a fraction of the cost. Set `sample=None` to score all."""
+    rng = np.random.default_rng(seed)
     cand, cost = sc.cand_edges, sc.cand_cost
-    chosen = np.zeros(len(cand), dtype=np.uint8)
+    C = len(cand)
+    chosen = np.zeros(C, dtype=np.uint8)
     spent = 0.0
     cur = obj(sc.n_nodes, sc.alive, sc.base_edges, w)
     steps = 0
     while True:
+        avail = np.where((chosen == 0) & (spent + cost <= sc.budget))[0]
+        if avail.size == 0:
+            break
+        if sample is not None and avail.size > sample:
+            avail = rng.choice(avail, sample, replace=False)
         best_gain, best_j = 1e-9, -1
-        for j in range(len(cand)):
-            if chosen[j] or spent + cost[j] > sc.budget:
-                continue
+        for j in avail:
             edges = np.concatenate([sc.base_edges, cand[chosen == 1], cand[j:j + 1]], axis=0)
             gain = (obj(sc.n_nodes, sc.alive, edges, w) - cur) / cost[j]
             if gain > best_gain:
-                best_gain, best_j = gain, j
+                best_gain, best_j = gain, int(j)
         if best_j < 0:
             break
         chosen[best_j] = 1
@@ -390,6 +414,33 @@ def genetic(sc: Scenario, fitness, pop_size=40, generations=120, seed=0):
         children[0] = best_x  # elitism
         pop = children
         history[g] = best_f
+    return best_x, best_f, history
+
+
+def simulated_annealing(sc: Scenario, fitness, iters=4800, seed=0,
+                        t0=1.0, t1=0.01, init_density=0.05):
+    """Simulated annealing baseline over the same penalized fitness, with an evaluation
+    budget (`iters`) matched to the QIEA (pop_size x generations). A single bit is flipped
+    per step and accepted by the Metropolis rule under a geometric cooling schedule. This
+    gives a second strong metaheuristic so the comparison is not GA-only."""
+    rng = np.random.default_rng(seed)
+    C = len(sc.cand_edges)
+    x = (rng.random(C) < init_density).astype(np.uint8)
+    fx = float(fitness(x[None, :])[0])
+    best_x, best_f = x.copy(), fx
+    history = np.empty(iters)
+    for t in range(iters):
+        temp = t0 * (t1 / t0) ** (t / max(iters - 1, 1))
+        j = int(rng.integers(C))
+        x[j] ^= 1
+        f2 = float(fitness(x[None, :])[0])
+        if f2 >= fx or rng.random() < np.exp((f2 - fx) / max(temp, 1e-9)):
+            fx = f2
+            if fx > best_f:
+                best_f, best_x = fx, x.copy()
+        else:
+            x[j] ^= 1  # reject: undo the flip
+        history[t] = best_f
     return best_x, best_f, history
 
 

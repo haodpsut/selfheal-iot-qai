@@ -1,256 +1,221 @@
-"""CS2 - Resource reallocation under a jamming surge.
+"""CS2 - Restoring device-to-gateway resilience under spatial link jamming.
 
-A set of IoT devices send traffic to gateways over wireless channels. An attacker jams a
-subset of channels (their usable rate drops to zero) at the same moment a traffic surge
-raises some devices' demand. The self-healing controller must re-assign devices to the
-surviving channels to maximise served demand under a transmit-power budget, while each
-channel has finite capacity and each device uses at most one channel.
+An adversary jams a geographic region, knocking out every wireless link whose midpoint falls
+inside the jammed disk, so a cluster of IoT links disappears at once. The self-healing
+controller activates backup links from a pre surveyed set, under an energy budget, to restore
+*device-to-gateway survivability*: the fraction of IoT devices that retain two edge disjoint
+paths to a gateway and therefore stay reachable after any single further link failure.
 
-This is a multiply-constrained generalized assignment problem (NP-hard). As in CS1 the QIEA
-selects device-channel pairings; the AI warm-start predicts the jammed channels and the
-surged devices and biases the search. Greedy / GA / random are the baselines.
+This is a second, structurally distinct threat from CS1 (adversarial regional link jamming
+versus random node cascades) and a different objective (sink oriented two edge connectivity
+versus a global survivable core), but it is the same kind of combinatorial, non submodular
+repair, so it exercises the same quantum-inspired solver and AI synergy. We reuse the CS1
+machinery: the Scenario container, the bridge based two edge component finder, the algebraic
+connectivity, and the QIEA / GA / SA / greedy solvers.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Optional
+from typing import Tuple
 import numpy as np
 
 from qio import optimize, QIEAConfig
+from cs1_topology import (
+    Scenario, set_binding_budget, genetic, greedy, simulated_annealing,
+    _two_edge_components, _algebraic_connectivity,
+)
+
+W_LAMBDA = 2.0
 
 
 # --------------------------------------------------------------------------------------
-# Scenario
+# Scenario: geometric IoT graph + gateways + spatial link jamming
 # --------------------------------------------------------------------------------------
-@dataclass
-class JamScenario:
-    n_dev: int
-    n_chan: int
-    demand: np.ndarray          # (n_dev,) traffic demand after the surge
-    rate: np.ndarray            # (n_dev, n_chan) achievable rate (0 on jammed channels)
-    power: np.ndarray           # (n_dev, n_chan) transmit power to use that channel
-    cap: np.ndarray             # (n_chan,) channel capacity
-    budget: float               # total transmit-power budget
-    pairs: np.ndarray           # (P, 2) candidate (device, channel) pairings, rate > 0
-    jammed: np.ndarray = field(repr=False)   # (n_chan,) bool
-    surged: np.ndarray = field(repr=False)   # (n_dev,) bool
-
-
 def make_jam_scenario(
-    n_dev: int = 120,
-    n_chan: int = 16,
-    jam_frac: float = 0.35,
-    surge_frac: float = 0.30,
-    surge_mult: float = 3.0,
-    budget_frac: float = 0.45,
+    n_nodes: int = 220,
+    radius: float = 0.115,
+    backup_radius: float = 0.21,
+    n_gateways: int = 2,
+    jam_frac: float = 0.25,
+    budget_frac: float = 0.06,
     seed: int = 0,
-) -> JamScenario:
-    """Random device/channel geometry, then jam a fraction of channels and surge a fraction
-    of devices. Budget is a fraction of the power needed to serve every device on its best
-    channel, so it binds."""
+) -> Tuple[Scenario, np.ndarray]:
+    """Random geometric IoT mesh, a few gateways, then a spatial jamming disk that removes a
+    contiguous block of links. Returns (Scenario, gateways)."""
     rng = np.random.default_rng(seed)
-    dev_pos = rng.random((n_dev, 2))
-    chan_pos = rng.random((n_chan, 2))
+    pos = rng.random((n_nodes, 2))
 
-    diff = dev_pos[:, None, :] - chan_pos[None, :, :]
-    dist = np.sqrt((diff ** 2).sum(-1)) + 1e-3
-    rate = 1.0 / dist                      # closer channel -> higher rate
-    power = dist ** 2                       # closer channel -> cheaper power
+    diff = pos[:, None, :] - pos[None, :, :]
+    dist = np.sqrt((diff ** 2).sum(-1))
+    np.fill_diagonal(dist, np.inf)
+    base_adj = dist <= radius
+    backup_adj = (dist <= backup_radius) & ~base_adj
 
-    jammed = np.zeros(n_chan, dtype=bool)
-    jammed[rng.choice(n_chan, int(jam_frac * n_chan), replace=False)] = True
-    rate[:, jammed] = 0.0                   # jammed channels deliver nothing
+    gateways = rng.choice(n_nodes, n_gateways, replace=False)
 
-    demand = rng.uniform(0.5, 1.0, n_dev)
-    surged = np.zeros(n_dev, dtype=bool)
-    surged[rng.choice(n_dev, int(surge_frac * n_dev), replace=False)] = True
-    demand[surged] *= surge_mult
+    bu, bv = np.where(np.triu(base_adj, 1))
+    base_edges = np.stack([bu, bv], axis=1)
 
-    cap = np.full(n_chan, demand.sum() / n_chan)   # capacity tight relative to total demand
+    # Spatial jamming: drop the base edges whose midpoints are closest to a random center,
+    # i.e. a contiguous jammed region rather than scattered links.
+    center = rng.random(2)
+    mid = 0.5 * (pos[base_edges[:, 0]] + pos[base_edges[:, 1]])
+    d2c = np.sqrt(((mid - center) ** 2).sum(1))
+    order = np.argsort(d2c, kind="stable")
+    n_jam = int(jam_frac * len(base_edges))
+    keep = np.ones(len(base_edges), dtype=bool)
+    keep[order[:n_jam]] = False
+    base_edges = base_edges[keep]
 
-    # Candidate pairings: any device-channel with positive rate.
-    du, cv = np.where(rate > 0)
-    pairs = np.stack([du, cv], axis=1)
+    cu, cv = np.where(np.triu(backup_adj, 1))
+    cand_edges = np.stack([cu, cv], axis=1)
+    cand_cost = dist[cand_edges[:, 0], cand_edges[:, 1]] ** 2
 
-    # Budget: a fraction of the power to serve each device on its cheapest live channel.
-    best_power = np.where(rate > 0, power, np.inf).min(axis=1)
-    best_power[~np.isfinite(best_power)] = 0.0
-    budget = budget_frac * best_power.sum()
-
-    return JamScenario(n_dev, n_chan, demand, rate, power, cap, budget, pairs, jammed, surged)
+    alive = np.ones(n_nodes, dtype=bool)
+    budget = budget_frac * cand_cost.sum() if cand_cost.size else 0.0
+    sc = Scenario(n_nodes, alive, base_edges, cand_edges, cand_cost, budget, pos)
+    return sc, gateways
 
 
 # --------------------------------------------------------------------------------------
-# Served-demand objective (with constraint penalties)
+# Objective: fraction of devices two-edge-connected to a gateway
 # --------------------------------------------------------------------------------------
-def _served(sc: JamScenario, x: np.ndarray) -> tuple:
-    """Decode a binary selection over candidate pairings into served demand + usage.
-
-    Same feasible decoder for every method (a fair comparison): each device keeps at most one
-    pairing (its highest served value), and pairings are admitted in value order while they
-    respect the channel capacity and the power budget. Returns (served_demand, power_used)."""
-    pairs = sc.pairs[x == 1]
-    if pairs.size == 0:
-        return 0.0, 0.0
-    dev = pairs[:, 0]
-    chan = pairs[:, 1]
-    served_val = np.minimum(sc.demand[dev], sc.rate[dev, chan])
-    pw = sc.power[dev, chan]
-
-    order = np.argsort(-served_val)
-    used_dev = set()
-    chan_load = np.zeros(sc.n_chan)
-    power_used = 0.0
-    served = 0.0
-    for k in order:
-        i, j = int(dev[k]), int(chan[k])
-        if i in used_dev or chan_load[j] + served_val[k] > sc.cap[j] or power_used + pw[k] > sc.budget:
-            continue
-        used_dev.add(i)
-        chan_load[j] += served_val[k]
-        power_used += pw[k]
-        served += served_val[k]
-    return served, power_used
+def _gateway_survivable(n_nodes, alive, edges, gateways) -> float:
+    """Fraction of devices (non-gateway alive nodes) sharing a 2-edge-connected component
+    with some gateway, i.e. with two edge disjoint paths to a gateway."""
+    comp = _two_edge_components(n_nodes, alive, edges)
+    gw_comps = set(int(comp[int(g)]) for g in gateways)
+    devices = [int(i) for i in np.where(alive)[0] if i not in set(int(g) for g in gateways)]
+    if not devices:
+        return 0.0
+    hit = sum(1 for d in devices if int(comp[d]) in gw_comps)
+    return hit / len(devices)
 
 
-def make_fitness(sc: JamScenario):
-    total_demand = sc.demand.sum()
+def _gateway_connected(n_nodes, alive, edges, gateways) -> float:
+    """Fraction of devices merely connected (one path) to a gateway. Used to give the greedy
+    baseline a friendly connectivity-first surrogate, so it is not a straw baseline."""
+    parent = np.arange(n_nodes)
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for u, v in edges:
+        ru, rv = find(u), find(v)
+        if ru != rv:
+            parent[ru] = rv
+    gw_comps = set(find(int(g)) for g in gateways)
+    gws = set(int(g) for g in gateways)
+    devices = [int(i) for i in np.where(alive)[0] if i not in gws]
+    if not devices:
+        return 0.0
+    return sum(1 for d in devices if find(d) in gw_comps) / len(devices)
+
+
+W_CONN = 0.5   # weight of the one-path connected term as a smooth gradient toward 2-edge
+
+
+def gw_resilience(n, alive, edges, w, gateways):
+    """Main objective: device-to-gateway two edge survivability, plus a one-path connected
+    term as a cheap smooth gradient. Pure union-find and bridge finding, no eigensolve, so it
+    scales. Algebraic connectivity is reported separately as a metric but not optimized here."""
+    return _gateway_survivable(n, alive, edges, gateways) + w * _gateway_connected(n, alive, edges, gateways)
+
+
+def gw_surv_only(n, alive, edges, w, gateways):
+    """Survivability only, for the naive greedy baseline (it stalls once merely connected)."""
+    return _gateway_survivable(n, alive, edges, gateways)
+
+
+def gw_resilience_conn(n, alive, edges, w, gateways):
+    """Connectivity-first surrogate for the stronger greedy baseline."""
+    return _gateway_connected(n, alive, edges, gateways) + _gateway_survivable(n, alive, edges, gateways)
+
+
+def make_fitness(sc: Scenario, gateways, w: float = W_CONN, energy_pref: float = 0.0):
+    base, cand, cost = sc.base_edges, sc.cand_edges, sc.cand_cost
+    budget = sc.budget if sc.budget > 0 else 1.0
 
     def fitness(pop: np.ndarray) -> np.ndarray:
         out = np.empty(pop.shape[0], dtype=np.float64)
         for i, x in enumerate(pop):
-            served, _ = _served(sc, x)
-            out[i] = served / total_demand
+            sel = cand[x == 1]
+            edges = np.concatenate([base, sel], axis=0) if sel.size else base
+            r = gw_resilience(sc.n_nodes, sc.alive, edges, w, gateways)
+            e = cost[x == 1].sum()
+            over = max(0.0, e - budget) / budget
+            out[i] = r - 100.0 * over - energy_pref * (e / budget)
         return out
 
     return fitness
 
 
 # --------------------------------------------------------------------------------------
-# AI warm-start: predict jammed channels + surged devices, favour cheap high-value pairings
+# AI warm-start prior: favour cheap backups that reconnect fragments toward a gateway
 # --------------------------------------------------------------------------------------
-def ai_prior(sc: JamScenario) -> np.ndarray:
-    dev = sc.pairs[:, 0]
-    chan = sc.pairs[:, 1]
-    served_val = np.minimum(sc.demand[dev], sc.rate[dev, chan])
-    pw = sc.power[dev, chan]
-    value_per_power = served_val / (pw + 1e-9)
-    score = value_per_power / (value_per_power.max() + 1e-9)
-    return 0.05 + 0.35 * score              # gentle bias to efficient pairings
+def ai_prior(sc: Scenario, gateways) -> np.ndarray:
+    parent = np.arange(sc.n_nodes)
 
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
 
-# --------------------------------------------------------------------------------------
-# Baselines
-# --------------------------------------------------------------------------------------
-def greedy(sc: JamScenario):
-    """Assign devices to channels in decreasing value-per-power, respecting capacity/power."""
-    dev = sc.pairs[:, 0]
-    chan = sc.pairs[:, 1]
-    served_val = np.minimum(sc.demand[dev], sc.rate[dev, chan])
-    pw = sc.power[dev, chan]
-    order = np.argsort(-(served_val / (pw + 1e-9)))
-    x = np.zeros(len(sc.pairs), dtype=np.uint8)
-    used_dev = set()
-    chan_load = np.zeros(sc.n_chan)
-    power_used = 0.0
-    for k in order:
-        i, j = dev[k], chan[k]
-        if i in used_dev or chan_load[j] + served_val[k] > sc.cap[j] or power_used + pw[k] > sc.budget:
-            continue
-        x[k] = 1
-        used_dev.add(int(i))
-        chan_load[j] += served_val[k]
-        power_used += pw[k]
-    return x
+    deg = np.zeros(sc.n_nodes)
+    for u, v in sc.base_edges:
+        deg[u] += 1
+        deg[v] += 1
+        ru, rv = find(u), find(v)
+        if ru != rv:
+            parent[ru] = rv
+    comp = np.array([find(i) for i in range(sc.n_nodes)])
+    gw_comps = set(int(comp[int(g)]) for g in gateways)
 
-
-def greedy_balanced(sc: JamScenario):
-    """Congestion-aware greedy: assign each device (in value order) to the live channel that
-    maximises its *throttled* marginal served value given the current channel loads, subject
-    to the power budget. A strong baseline that defuses the 'naive greedy' strawman."""
-    # Best (device, channel) raw value/power per device to set an assignment order.
-    order_dev = np.argsort(-(sc.demand))
-    chan_load = np.zeros(sc.n_chan)
-    power_used = 0.0
-    x = np.zeros(len(sc.pairs), dtype=np.uint8)
-    pair_index = {(int(d), int(c)): k for k, (d, c) in enumerate(sc.pairs)}
-    for i in order_dev:
-        best_gain, best_j, best_k = 0.0, -1, -1
-        for j in range(sc.n_chan):
-            if sc.rate[i, j] <= 0:
-                continue
-            k = pair_index.get((int(i), int(j)))
-            if k is None or power_used + sc.power[i, j] > sc.budget:
-                continue
-            v = min(sc.demand[i], sc.rate[i, j])
-            new_load = chan_load[j] + v
-            factor = min(1.0, sc.cap[j] / (new_load + 1e-9))
-            gain = v * factor                # throttled value if added here
-            if gain > best_gain:
-                best_gain, best_j, best_k = gain, j, k
-        if best_j < 0:
-            continue
-        x[best_k] = 1
-        chan_load[best_j] += min(sc.demand[i], sc.rate[i, best_j])
-        power_used += sc.power[i, best_j]
-    return x
-
-
-def genetic(sc: JamScenario, fitness, pop_size=40, generations=120, seed=0):
-    rng = np.random.default_rng(seed)
-    P = len(sc.pairs)
-    pop = (rng.random((pop_size, P)) < 0.1).astype(np.uint8)
-    best_x, best_f = None, -np.inf
-    history = np.empty(generations)
-    for g in range(generations):
-        fit = fitness(pop)
-        j = int(np.argmax(fit))
-        if fit[j] > best_f:
-            best_f, best_x = float(fit[j]), pop[j].copy()
-        a, b = rng.integers(0, pop_size, (2, pop_size))
-        winners = np.where(fit[a] >= fit[b], a, b)
-        parents = pop[winners]
-        mask = rng.random((pop_size, P)) < 0.5
-        children = np.where(mask, parents, parents[rng.permutation(pop_size)])
-        flip = rng.random((pop_size, P)) < (1.0 / max(P, 1))
-        children ^= flip.astype(np.uint8)
-        children[0] = best_x
-        pop = children
-        history[g] = best_f
-    return best_x, best_f, history
+    cu, cv = sc.cand_edges[:, 0], sc.cand_edges[:, 1]
+    in_gw_u = np.array([int(comp[int(a)]) in gw_comps for a in cu])
+    in_gw_v = np.array([int(comp[int(b)]) in gw_comps for b in cv])
+    toward = (in_gw_u ^ in_gw_v).astype(np.float64)        # links a fragment to a gateway side
+    thin = 1.0 - (deg[cu] + deg[cv]) / ((deg[cu] + deg[cv]).max() + 1e-9)
+    cheap = 1.0 - (sc.cand_cost / (sc.cand_cost.max() + 1e-9))
+    score = 0.5 * toward + 0.3 * thin + 0.2 * cheap
+    return 0.04 + 0.30 * (score - score.min()) / (np.ptp(score) + 1e-9)
 
 
 # --------------------------------------------------------------------------------------
 # Smoke-test driver
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    sc = make_jam_scenario(seed=0)
-    total = sc.demand.sum()
-    print(f"devices={sc.n_dev} channels={sc.n_chan} jammed={int(sc.jammed.sum())} "
-          f"surged={int(sc.surged.sum())} candidates={len(sc.pairs)} "
-          f"budget={sc.budget:.3f} total_demand={total:.2f}")
+    sc, gw = make_jam_scenario(seed=0)
+    set_binding_budget(sc, frac=0.06)
+    pre = _gateway_survivable(sc.n_nodes, sc.alive, sc.base_edges, gw)
+    print(f"nodes={sc.n_nodes} gateways={list(gw)} candidates={len(sc.cand_edges)} "
+          f"budget={sc.budget:.3f} pre-heal gateway-survivable={pre:.3f}")
 
-    fit = make_fitness(sc)
-    prior = ai_prior(sc)
-    uniform = np.full(len(sc.pairs), float(prior.mean()))
+    fit = make_fitness(sc, gw)
+    prior = ai_prior(sc, gw)
+    uniform = np.full(len(sc.cand_edges), float(prior.mean()))
     cfg = QIEAConfig(pop_size=40, generations=100, seed=0)
 
-    def latency(h, frac=0.95):
-        t = frac * h[-1]
-        hit = np.where(h >= t)[0]
-        return int(hit[0]) if hit.size else len(h)
+    r_ai = optimize(fit, len(sc.cand_edges), cfg, prior=prior)
+    r_no = optimize(fit, len(sc.cand_edges), cfg, prior=uniform)
+    bx, _, _ = genetic(sc, fit, seed=0)
+    sx, _, _ = simulated_annealing(sc, fit, iters=4000, seed=0)
+    gx, _, _, _ = greedy(sc, obj=lambda n, a, e, w: gw_surv_only(n, a, e, w, gw))
+    gcx, _, _, _ = greedy(sc, obj=lambda n, a, e, w: gw_resilience_conn(n, a, e, w, gw))
 
-    r_ai = optimize(fit, len(sc.pairs), cfg, prior=prior)
-    r_no = optimize(fit, len(sc.pairs), cfg, prior=uniform)
-    bx, bf, _ = genetic(sc, fit, seed=0)
-    gx = greedy(sc)
+    def rep(name, x):
+        edges = np.concatenate([sc.base_edges, sc.cand_edges[x == 1]], axis=0)
+        s = _gateway_survivable(sc.n_nodes, sc.alive, edges, gw)
+        e = sc.cand_cost[x == 1].sum()
+        print(f"  {name:14s} gw-survivable={s:.3f}  energy={e:.3f}/{sc.budget:.3f}")
 
-    def rep(name, x, extra=""):
-        served, pw = _served(sc, x)
-        print(f"  {name:14s} served={served/total:.3f}  power={pw:.3f}/{sc.budget:.3f}  {extra}")
-
-    print("post-heal served-demand fraction:")
-    rep("QIEA + AI", r_ai.best_x, f"latency={latency(r_ai.history)}")
-    rep("QIEA (no AI)", r_no.best_x, f"latency={latency(r_no.history)}")
+    print("post-heal (device-to-gateway survivable fraction):")
+    rep("QIEA + AI", r_ai.best_x)
+    rep("QIEA (no AI)", r_no.best_x)
     rep("GA", bx)
+    rep("SA", sx)
     rep("greedy", gx)
+    rep("greedy-conn", gcx)

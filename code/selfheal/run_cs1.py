@@ -16,8 +16,9 @@ import numpy as np
 from qio import optimize, QIEAConfig
 from cs1_topology import (
     make_scenario, set_binding_budget, make_fitness, ai_prior, genetic, greedy,
+    simulated_annealing,
     _giant_fraction, _survivable_fraction, _algebraic_connectivity,
-    _resilience, _resilience_conn,
+    _resilience, _resilience_surv, _resilience_giant_surv,
 )
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "results", "cs1")
@@ -27,9 +28,12 @@ POP = 40
 # Scenario knobs, tuned so instances are consistently HARD: heavy cascading fragmentation
 # plus a tight repair budget, so reaching full survivability is non-trivial and methods
 # separate cleanly instead of all saturating at 1.0.
-N_NODES = 200
+N_NODES = 200        # validated hard regime (denser N=300 became trivial + destabilized the prior)
+RADIUS = 0.13
+BACKUP_RADIUS = 0.20
 FAIL_FRAC = 0.32
 BUDGET_FRAC = 0.035   # tighter: leaves headroom so the AI prior's quality gain stays visible
+SA_ITERS = POP * GENERATIONS   # simulated-annealing eval budget matched to QIEA/GA
 
 
 def _latency(history, frac=0.95):
@@ -50,7 +54,8 @@ def _metrics(sc, x):
 
 
 def run_seed(seed: int) -> list[dict]:
-    sc = make_scenario(n_nodes=N_NODES, fail_frac=FAIL_FRAC, seed=seed)
+    sc = make_scenario(n_nodes=N_NODES, radius=RADIUS, backup_radius=BACKUP_RADIUS,
+                       fail_frac=FAIL_FRAC, seed=seed)
     set_binding_budget(sc, frac=BUDGET_FRAC)
     fit = make_fitness(sc)
     prior = ai_prior(sc)
@@ -70,10 +75,13 @@ def run_seed(seed: int) -> list[dict]:
     bx, _, bh = genetic(sc, fit, pop_size=POP, generations=GENERATIONS, seed=seed)
     rows.append(dict(method="GA", seed=seed, latency=_latency(bh), **_metrics(sc, bx)))
 
-    gx, _, _, gsteps = greedy(sc, obj=_resilience)
+    sx, _, sh = simulated_annealing(sc, fit, iters=SA_ITERS, seed=seed)
+    rows.append(dict(method="SA", seed=seed, latency=_latency(sh), **_metrics(sc, sx)))
+
+    gx, _, _, gsteps = greedy(sc, obj=_resilience_surv)
     rows.append(dict(method="greedy", seed=seed, latency=gsteps, **_metrics(sc, gx)))
 
-    gcx, _, _, gcsteps = greedy(sc, obj=_resilience_conn)
+    gcx, _, _, gcsteps = greedy(sc, obj=_resilience_giant_surv)
     rows.append(dict(method="greedy-conn", seed=seed, latency=gcsteps, **_metrics(sc, gcx)))
 
     return rows
@@ -116,7 +124,7 @@ def main():
                 f.write(",".join(f"{v:.6f}" for v in h) + "\n")
 
     # Summary: mean +/- std per method, plus Wilcoxon vs QIEA+AI on survivable fraction.
-    methods = ["QIEA+AI", "QIEA-noAI", "GA", "greedy", "greedy-conn"]
+    methods = ["QIEA+AI", "QIEA-noAI", "GA", "SA", "greedy", "greedy-conn"]
     by = {m: [r for r in all_rows if r["method"] == m] for m in methods}
     print("\nmethod        survivable        lam2          energy     latency")
     for m in methods:

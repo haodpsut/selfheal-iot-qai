@@ -1,13 +1,12 @@
-"""Multi-seed runner for CS2 (reallocation under a jamming surge).
+"""Multi-seed runner for CS2 (device-to-gateway resilience under spatial link jamming).
 
-Mirrors run_cs1.py: runs every method over N seeds, writes results/cs2/cs2_results.csv plus
-QIEA convergence histories, and prints a mean +/- std summary with Wilcoxon tests. CS2's role
-is to show the AI<->QIO synergy GENERALISES to a second, structurally different resilience
-problem; greedy is a strong baseline here (capacity-bound reallocation is greedy-friendly), so
-the headline is the synergy delta (QIEA+AI vs QIEA-noAI), not beating greedy.
+Mirrors run_cs1.py for the combinatorial CS2: an adversary jams a region, and the controller
+activates backup links under an energy budget to restore the fraction of devices that keep two
+edge disjoint paths to a gateway. Writes results/cs2/cs2_results.csv plus QIEA convergence
+histories, and prints a mean +/- std summary with Wilcoxon tests.
 
     python run_cs2.py 3        # local smoke
-    python run_cs2.py 30 6     # full run, 6 parallel workers
+    python run_cs2.py 50 6     # full run, 6 parallel workers
 """
 
 from __future__ import annotations
@@ -16,11 +15,19 @@ import os
 import numpy as np
 
 from qio import optimize, QIEAConfig
-from cs2_jamming import make_jam_scenario, make_fitness, ai_prior, genetic, greedy, _served
+from cs1_topology import set_binding_budget, genetic, greedy, simulated_annealing, _algebraic_connectivity
+from cs2_jamming import (
+    make_jam_scenario, make_fitness, ai_prior,
+    _gateway_survivable, gw_surv_only, gw_resilience_conn,
+)
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "results", "cs2")
 GENERATIONS = 120
 POP = 40
+SA_ITERS = POP * GENERATIONS
+N_NODES = 220
+JAM_FRAC = 0.25
+BUDGET_FRAC = 0.06
 
 
 def _latency(history, frac=0.95):
@@ -29,29 +36,38 @@ def _latency(history, frac=0.95):
     return int(hit[0]) if hit.size else len(history)
 
 
-def _metrics(sc, x):
-    served, pw = _served(sc, x)
-    return dict(served=served / sc.demand.sum(), power=float(pw))
+def _metrics(sc, gw, x):
+    edges = np.concatenate([sc.base_edges, sc.cand_edges[x == 1]], axis=0)
+    return dict(
+        gw_survivable=_gateway_survivable(sc.n_nodes, sc.alive, edges, gw),
+        energy=float(sc.cand_cost[x == 1].sum()),
+        edges=int(x.sum()),
+    )
 
 
 def run_seed(seed: int) -> list:
-    sc = make_jam_scenario(seed=seed)
-    fit = make_fitness(sc)
-    prior = ai_prior(sc)
-    uniform = np.full(len(sc.pairs), float(prior.mean()))
+    sc, gw = make_jam_scenario(n_nodes=N_NODES, jam_frac=JAM_FRAC, seed=seed)
+    set_binding_budget(sc, frac=BUDGET_FRAC)
+    fit = make_fitness(sc, gw)
+    prior = ai_prior(sc, gw)
+    uniform = np.full(len(sc.cand_edges), float(prior.mean()))
     cfg = QIEAConfig(pop_size=POP, generations=GENERATIONS, seed=seed)
 
     rows = []
-    r_ai = optimize(fit, len(sc.pairs), cfg, prior=prior)
+    r_ai = optimize(fit, len(sc.cand_edges), cfg, prior=prior)
     rows.append(dict(method="QIEA+AI", seed=seed, latency=_latency(r_ai.history),
-                     history=r_ai.history.tolist(), **_metrics(sc, r_ai.best_x)))
-    r_no = optimize(fit, len(sc.pairs), cfg, prior=uniform)
+                     history=r_ai.history.tolist(), **_metrics(sc, gw, r_ai.best_x)))
+    r_no = optimize(fit, len(sc.cand_edges), cfg, prior=uniform)
     rows.append(dict(method="QIEA-noAI", seed=seed, latency=_latency(r_no.history),
-                     history=r_no.history.tolist(), **_metrics(sc, r_no.best_x)))
+                     history=r_no.history.tolist(), **_metrics(sc, gw, r_no.best_x)))
     bx, _, bh = genetic(sc, fit, pop_size=POP, generations=GENERATIONS, seed=seed)
-    rows.append(dict(method="GA", seed=seed, latency=_latency(bh), **_metrics(sc, bx)))
-    gx = greedy(sc)
-    rows.append(dict(method="greedy", seed=seed, latency=0, **_metrics(sc, gx)))
+    rows.append(dict(method="GA", seed=seed, latency=_latency(bh), **_metrics(sc, gw, bx)))
+    sx, _, sh = simulated_annealing(sc, fit, iters=SA_ITERS, seed=seed)
+    rows.append(dict(method="SA", seed=seed, latency=_latency(sh), **_metrics(sc, gw, sx)))
+    gx, _, _, gs = greedy(sc, obj=lambda n, a, e, w: gw_surv_only(n, a, e, w, gw))
+    rows.append(dict(method="greedy", seed=seed, latency=gs, **_metrics(sc, gw, gx)))
+    gcx, _, _, gcs = greedy(sc, obj=lambda n, a, e, w: gw_resilience_conn(n, a, e, w, gw))
+    rows.append(dict(method="greedy-conn", seed=seed, latency=gcs, **_metrics(sc, gw, gcx)))
     return rows
 
 
@@ -64,17 +80,17 @@ def main():
         with Pool(jobs) as pool:
             for rows in pool.imap_unordered(run_seed, range(n_seeds)):
                 all_rows.extend(rows)
-                sv = {r["method"]: r["served"] for r in rows}
+                sv = {r["method"]: r["gw_survivable"] for r in rows}
                 print(f"seed {rows[0]['seed']:2d}  " + "  ".join(f"{m}={sv[m]:.3f}" for m in sv))
     else:
         for s in range(n_seeds):
             rows = run_seed(s)
             all_rows.extend(rows)
-            sv = {r["method"]: r["served"] for r in rows}
+            sv = {r["method"]: r["gw_survivable"] for r in rows}
             print(f"seed {s:2d}  " + "  ".join(f"{m}={sv[m]:.3f}" for m in sv))
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    cols = ["method", "seed", "served", "power", "latency"]
+    cols = ["method", "seed", "gw_survivable", "energy", "edges", "latency"]
     path = os.path.join(OUT_DIR, "cs2_results.csv")
     with open(path, "w") as f:
         f.write(",".join(cols) + "\n")
@@ -88,26 +104,26 @@ def main():
             for h in hs:
                 f.write(",".join(f"{v:.6f}" for v in h) + "\n")
 
-    methods = ["QIEA+AI", "QIEA-noAI", "GA", "greedy"]
+    methods = ["QIEA+AI", "QIEA-noAI", "GA", "SA", "greedy", "greedy-conn"]
     by = {m: [r for r in all_rows if r["method"] == m] for m in methods}
-    print("\nmethod        served            power      latency")
+    print("\nmethod        gw_survivable     energy   latency")
     for m in methods:
-        sv = np.array([r["served"] for r in by[m]])
-        pw = np.array([r["power"] for r in by[m]])
+        sv = np.array([r["gw_survivable"] for r in by[m]])
+        en = np.array([r["energy"] for r in by[m]])
         lt = np.array([r["latency"] for r in by[m]])
-        print(f"{m:12s}  {sv.mean():.3f}+/-{sv.std():.3f}   {pw.mean():.3f}    {lt.mean():.1f}")
+        print(f"{m:12s}  {sv.mean():.3f}+/-{sv.std():.3f}   {en.mean():.3f}   {lt.mean():.1f}")
 
     try:
         from scipy.stats import wilcoxon
-        ref = np.array([r["served"] for r in by["QIEA+AI"]])
-        print("\nWilcoxon (served, QIEA+AI vs ...):")
+        ref = np.array([r["gw_survivable"] for r in by["QIEA+AI"]])
+        print("\nWilcoxon (gw_survivable, QIEA+AI vs ...):")
         for m in methods[1:]:
-            other = np.array([r["served"] for r in by[m]])
+            other = np.array([r["gw_survivable"] for r in by[m]])
             if np.allclose(ref, other):
-                print(f"  vs {m:10s}: identical")
+                print(f"  vs {m:12s}: identical")
                 continue
             stat, p = wilcoxon(ref, other)
-            print(f"  vs {m:10s}: p={p:.4g}")
+            print(f"  vs {m:12s}: p={p:.4g}")
     except Exception as e:
         print(f"\n(scipy not available for Wilcoxon: {e})")
 
