@@ -1,0 +1,88 @@
+% IEEE Network magazine article.
+% Special Issue: Quantum-AI Synergies Empowering IoT Network Resilience.
+% HARD LIMITS: 4500 words (intro->conclusion), <=6 figures+tables combined,
+% no equations (<=3 simple ones with GE consent), 15 references.
+% House style: no dashes as punctuation (use commas / parentheses / colons).
+\documentclass[journal]{IEEEtran}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage[hidelinks]{hyperref}
+
+\begin{document}
+
+\title{Self-Healing IoT Networks: A Quantum-AI Closed-Loop Framework for Resilience}
+
+\author{Do Phuc Hao and collaborators% TODO author block + affiliations (CAIRA / DAU)
+\thanks{Manuscript submitted to the IEEE Network Special Issue on Quantum-AI Synergies Empowering IoT Network Resilience.}}
+
+\maketitle
+
+\begin{abstract}
+% ~150 words. Problem: IoT networks fragment under cascading faults and targeted attacks.
+% Gap: reactive, myopic repair leaves them fragile to the next failure. Idea: a closed loop
+% that couples a lightweight AI perception layer (detect and localize degradation) with a
+% quantum-inspired optimization layer (recompute a resilient configuration under an energy
+% budget). Synergy: the AI risk map warm-starts and prunes the quantum-inspired search, and
+% recovered configurations retrain the detector. Evidence: two case studies show the loop
+% restores worst-case survivability that myopic repair cannot, and that AI guidance speeds
+% healing. Honest: the quantum-inspired optimizer is competitive with strong metaheuristics,
+% and its probabilistic substrate is what makes the AI fusion natural.
+\textit{TODO abstract.}
+\end{abstract}
+
+\begin{IEEEkeywords}
+IoT resilience, self-healing networks, quantum-inspired optimization, edge AI, network robustness.
+\end{IEEEkeywords}
+
+% ======================================================================
+\section{Introduction}
+% ~600 words. Resilience as the central theme. Cascading failures + attacks in IoT. Why
+% classical reactive healing is insufficient (myopic, leaves single points of failure). The
+% quantum-AI synergy thesis. Contributions: (1) closed-loop self-healing framework,
+% (2) AI<->QIO synergy mechanism, (3) two case studies, (4) honest portfolio comparison.
+
+% ======================================================================
+\section{Why Quantum-AI Synergy for Resilience}
+% ~600 words. Background, accessible. Resilience challenges in IoT (topology robustness,
+% jamming, energy limits). What AI brings (fast detection/prediction). What quantum-inspired
+% optimization brings (global combinatorial search, GPU-batchable, anytime). Why the
+% *synergy* (not either alone): the probabilistic Q-bit substrate is the natural carrier for
+% AI priors. Table 1 = taxonomy mapping resilience challenges -> quantum-AI mechanisms.
+
+% ======================================================================
+\section{The Self-Healing Closed Loop}
+% ~900 words. The framework: Sense -> Detect/Predict (AI) -> Reoptimize (QIO) -> Actuate ->
+% Learn. Fig 1 = architecture (TikZ). The two synergy channels: AI->QIO (warm-start + search
+% pruning via Q-bit amplitudes) and QIO->AI (recovered configs as feedback). Solver-agnostic
+% but QIO-native prior fusion.
+
+% ======================================================================
+\section{Case Study 1: Reconfiguration under Cascading Failures}
+% ~700 words. Setup, worst-case survivability objective (2-edge-connected core + lambda2)
+% under an energy budget. Fig 2 = survivable fraction + budget utilisation (greedy under-heals).
+% Fig 4 = synergy ablation (AI warm-start convergence curves / healing latency). Honest table.
+
+% ======================================================================
+\section{Case Study 2: Reallocation under Jamming Surge}
+% ~700 words. Edge IoT, jamming knocks out links + traffic surge. Reroute/reallocate to
+% maximize served demand under power. Fig 3 = served demand + tail latency vs baselines.
+
+% ======================================================================
+\section{Discussion and Open Challenges}
+% ~500 words. What the synergy buys (faster, budget-aware, resilient healing). Honest limits
+% (metaheuristics competitive; quantum-inspired not quantum-supreme). Path to real QPU.
+% Open challenges: scalability, distributed/federated healing, security of the loop.
+
+% ======================================================================
+\section{Conclusion}
+% ~150 words.
+
+\begin{thebibliography}{15}
+% <=15 refs. TODO.
+\bibitem{ref1} TODO.
+\end{thebibliography}
+
+\end{document}

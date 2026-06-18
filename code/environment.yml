@@ -1,0 +1,19 @@
+# Conda environment for the Self-Healing IoT (Quantum-AI) experiments.
+# RTX 4090 server is conda-only (no system pip / no sudo). pip-within-conda is OK.
+# Create with:  conda env create -f environment.yml  &&  conda activate selfheal
+name: selfheal
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy
+  - scipy
+  - networkx
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - tqdm
+  - pytorch
+  - pytorch-cuda=12.1
