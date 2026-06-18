@@ -18,3 +18,7 @@ results/**/*.npy
 results/**/*.npz
 # figures are regenerated from CSVs by the plot scripts
 results/**/*.png
+
+# paper build images / logs
+paper/*.png
+paper/build*.log
