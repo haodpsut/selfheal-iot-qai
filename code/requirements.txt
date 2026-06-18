@@ -1,0 +1,4 @@
+# pip fallback if conda channels are unreachable on the server.
+#   pip install -r code/requirements.txt
+numpy
+scipy

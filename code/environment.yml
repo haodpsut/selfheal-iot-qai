@@ -1,19 +1,17 @@
-# Conda environment for the Self-Healing IoT (Quantum-AI) experiments.
-# RTX 4090 server is conda-only (no system pip / no sudo). pip-within-conda is OK.
-# Create with:  conda env create -f environment.yml  &&  conda activate selfheal
+# Minimal conda environment for the Self-Healing IoT experiments.
+# The experiments only need numpy (required) and scipy (optional, for the Wilcoxon test).
+# There is NO torch / networkx / pandas dependency: connectivity uses a hand-rolled
+# union-find and Tarjan bridge finder, and the Fiedler value uses numpy.linalg.eigvalsh.
+#
+# Create with:  conda env create -f code/environment.yml  &&  conda activate selfheal
+# If conda-forge is unreachable on the server, just run in an existing env that has numpy:
+#   conda activate base ; pip install scipy ; python code/selfheal/run_cs1.py 30 6
 name: selfheal
 channels:
-  - pytorch
-  - nvidia
-  - conda-forge
+  - defaults
 dependencies:
   - python=3.10
   - numpy
   - scipy
-  - networkx
-  - pandas
-  - matplotlib
-  - scikit-learn
-  - tqdm
-  - pytorch
-  - pytorch-cuda=12.1
+  # matplotlib is only needed for the local plotting script (plot_cs1.py), not on the server:
+  # - matplotlib

@@ -83,11 +83,16 @@ Intro 600 · Why Quantum-AI for resilience 600 · Framework 900 · CS1 700 · CS
 Smoke-tested locally already. On the server, run inside a tmux session so it survives
 disconnects. Use 6 parallel workers (`6`); raise it if the box has more spare cores.
 
+The code only needs **numpy** (required) and **scipy** (optional, for the Wilcoxon test).
+No torch / networkx / pandas. If conda-forge is unreachable, just use an existing env.
+
 ```bash
-# 1. one-time environment setup
+# 1. environment. Easiest path: reuse an env that already has numpy (e.g. base).
 cd selfheal-iot-qai
-conda env create -f code/environment.yml      # creates env "selfheal"
-conda activate selfheal
+conda activate base
+python -c "import numpy" || pip install -r code/requirements.txt
+python -c "import scipy" || pip install scipy          # optional, only for Wilcoxon
+# (or, if conda-forge works:  conda env create -f code/environment.yml && conda activate selfheal)
 
 # 2. start a detachable session
 tmux new -s selfheal
