@@ -16,4 +16,5 @@ paper/*.pdf
 # Keep results CSVs (small, needed for analysis), ignore large/binary outputs
 results/**/*.npy
 results/**/*.npz
-results/**/*.png   # figures are regenerated from CSVs by the plot scripts
+# figures are regenerated from CSVs by the plot scripts
+results/**/*.png
