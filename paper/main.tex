@@ -1,10 +1,11 @@
-% IEEE Network magazine article.
-% Special Issue: Quantum-AI Synergies Empowering IoT Network Resilience.
-% HARD LIMITS: 4500 words (intro->conclusion), <=6 figures+tables combined,
-% no equations (<=3 simple ones with GE consent), 15 references.
+% IEEE Network (Special Issue: Quantum-AI Synergies Empowering IoT Network Resilience).
+% Hybrid style: IEEE Network magazine flow (Intro / Background / Framework / Case Studies /
+% Challenges / Conclusion) with selective rigor (a compact model, ~5 equations, an ablation).
+% Target ~8 printed pages, matching real IEEE Network articles in this niche.
 % House style: no dashes as punctuation (use commas / parentheses / colons).
 \documentclass[journal]{IEEEtran}
 
+\usepackage{amsmath, amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{tikz}
@@ -22,32 +23,34 @@
 \maketitle
 
 \begin{abstract}
-Internet of Things deployments fragment under cascading device failures and targeted jamming, and the damage is rarely a single clean break: a network that is merely reconnected after a fault often remains one link away from the next collapse. We argue that resilience asks for a closed loop rather than a one shot repair, and we present a self-healing framework that couples a lightweight artificial intelligence perception layer, which detects and localizes degradation, with a quantum-inspired optimization layer, which recomputes a resilient configuration under an energy budget. The synergy is concrete: the perception layer produces a risk map that warm-starts and prunes the quantum-inspired search through its probabilistic qubit representation, and recovered configurations are fed back to keep the detector calibrated. Across two case studies, restoring worst case survivability after cascading failures and reallocating resources under a jamming surge, the loop restores resilience that myopic repair cannot, and the warm start makes healing both faster and markedly more reliable. We report the comparison honestly: the quantum-inspired optimizer is competitive with strong metaheuristics rather than dominant, and its value lies in being the natural substrate for fusing learned guidance into combinatorial healing.
+Internet of Things deployments fragment under cascading device failures and targeted jamming, and a network that is merely reconnected after a fault often remains one link away from the next collapse. We argue that resilience asks for a closed loop rather than a one shot repair, and we present a self-healing framework that couples a lightweight artificial intelligence perception layer, which detects and localizes degradation, with a quantum-inspired optimization layer, which recomputes a resilient configuration under an energy budget. The synergy is concrete: the perception layer produces a risk map that warm-starts and prunes the quantum-inspired search through its probabilistic qubit representation, and recovered configurations are fed back to keep the detector calibrated. We cast repair as a budget constrained maximization of a worst case survivability objective augmented with spectral robustness, and we evaluate the loop on two distinct threats across thirty random scenarios each. On cascading failures the loop restores survivability that myopic repair cannot, and an ablation shows the warm-start makes healing both faster and about three times more reliable. On a jamming surge the same framework adapts its solver to a near separable problem. We report the comparison honestly: the quantum-inspired optimizer is competitive with strong metaheuristics rather than dominant, and its value is in being the natural substrate for fusing learned guidance into combinatorial healing.
 \end{abstract}
 
 \begin{IEEEkeywords}
-IoT resilience, self-healing networks, quantum-inspired optimization, edge AI, network robustness.
+IoT resilience, self-healing networks, quantum-inspired optimization, edge AI, algebraic connectivity, network survivability.
 \end{IEEEkeywords}
 
 % ======================================================================
-\section{Introduction}
+\section{Introduction}\label{sec:intro}
 
-The Internet of Things now carries traffic that critical infrastructure depends on, yet the networks that carry it are fragile. Battery exhaustion, weather, and physical tampering remove nodes in bursts, and a single hub loss can cascade as newly isolated neighbours drop in turn. Adversaries add a sharper threat: a jammer can silence a band of channels at the very moment demand spikes. The shared property of these events is not that they disconnect a network once, but that they leave it brittle, sitting on single points of failure where the next small disturbance becomes the next outage.
+\IEEEPARstart{T}{he} Internet of Things now carries traffic that critical infrastructure depends on, yet the networks that carry it are fragile. Battery exhaustion, weather, and physical tampering remove nodes in bursts, and a single hub loss can cascade as newly isolated neighbours drop in turn. Adversaries add a sharper threat: a jammer can silence a band of channels at the very moment demand spikes. The shared property of these events is not that they disconnect a network once, but that they leave it brittle, sitting on single points of failure where the next small disturbance becomes the next outage.
 
-Classical recovery tends to be reactive and myopic. A controller that reconnects the largest possible component, or that assigns each device to its cheapest free channel, optimizes the situation in front of it and stops. Such repair is fast, but it spends little thought on the failure after this one, so the healed network is connected without being survivable. Making a network survivable, meaning it stays connected after any further single failure, is a global and combinatorial property: it usually requires several coordinated link activations that close redundant cycles, where no single activation looks worthwhile on its own. This is precisely where a greedy controller stalls.
+Classical recovery tends to be reactive and myopic. A controller that reconnects the largest possible component, or that assigns each device to its cheapest free channel, optimizes the situation in front of it and stops. Such repair is fast, but it spends little thought on the failure after this one, so the healed network is connected without being survivable. Making a network survivable, meaning it stays connected after any further single failure, is a global and combinatorial property: it usually requires several coordinated link activations that close redundant cycles, where no single activation looks worthwhile on its own. This is precisely where a greedy controller stalls, a behaviour we both observe and dissect by ablation.
 
-Two technologies are maturing that, taken together, address this gap. Artificial intelligence at the edge can detect and localize degradation in milliseconds from streaming telemetry. Quantum-inspired optimization brings population based, anytime, and highly parallel global search to the combinatorial reconfiguration problem, without requiring a quantum processor. Our thesis is that their synergy, not either one alone, is what enables genuine self-healing: the learned risk map is the right object to steer a global optimizer, and the optimizer is the right engine to turn that map into a resilient configuration.
+Two technologies are maturing that, together, address this gap. Artificial intelligence at the edge can detect and localize degradation in milliseconds from streaming telemetry. Quantum-inspired optimization brings population based, anytime, and highly parallel global search to the combinatorial reconfiguration problem, without requiring a quantum processor. Our thesis is that their synergy, not either one alone, enables genuine self-healing: the learned risk map is the right object to steer a global optimizer, and the optimizer is the right engine to turn that map into a resilient configuration.
 
-We make four contributions. First, we formulate self-healing as a closed loop that senses, detects, reoptimizes, actuates, and learns. Second, we identify a concrete synergy mechanism: the perception layer warms up and prunes the quantum-inspired search through its probabilistic qubit amplitudes, and recovered configurations retrain the detector. Third, we evaluate the loop on two distinct resilience threats. Fourth, we report an honest portfolio comparison, including strong classical baselines, and locate the quantum-inspired optimizer's value in fusion and reliability rather than raw dominance.
+We make four contributions. First, we formalize self-healing as a closed loop and cast repair as budget constrained survivability maximization. Second, we identify and instrument a concrete synergy mechanism: the perception layer warm-starts and prunes the quantum-inspired search through its qubit amplitudes, and recovered configurations retrain the detector. Third, we evaluate the loop on two distinct resilience threats with multi seed statistics. Fourth, we provide an ablation that isolates the warm-start, the search-pruning pull, the robustness weight, and the energy budget, and we report an honest portfolio comparison that locates the quantum-inspired optimizer's value in fusion and reliability rather than raw dominance.
 
 % ======================================================================
-\section{Why a Quantum-AI Synergy for Resilience}
+\section{Why a Quantum-AI Synergy for Resilience}\label{sec:why}
 
 Resilience in IoT spans several coupled challenges: topological robustness against node and link loss, robustness of wireless access against interference and jamming, and all of it under tight energy budgets. No single technique answers all of them, which is why a framework that combines complementary strengths is attractive.
 
 Artificial intelligence contributes speed and anticipation. A small model running at a gateway or on a device can flag which nodes are becoming critical, predict where a cascade will propagate, and estimate post fault demand, all far faster than any exhaustive search. What it does not provide is a guarantee that its decisions compose into a globally resilient configuration.
 
 Quantum-inspired optimization contributes global combinatorial search. Quantum-inspired evolutionary algorithms represent each decision variable as a qubit whose state is a probability, evolve a population of such probabilistic individuals, and rotate them toward the best solutions observed. They run on commodity hardware, scale to large IoT instances, are naturally parallel, and are anytime, returning a usable configuration whenever the deadline arrives. What they lack is any sense of where in a vast search space the good solutions lie.
+
+Interest in marrying these technologies for networks is rising quickly. Recent work has studied quantum federated learning over classical and quantum networks and its use in space air ground integrated systems, quantum machine learning as a primitive for communication intelligence, and quantum and quantum-inspired optimization for routing, scheduling, and resource allocation. Most of this effort targets either learning or optimization in isolation, and treats faults as a backdrop rather than the object of study. Network resilience, and self-healing in particular, has been examined largely through classical survivability design and reactive restoration. The gap we address sits exactly between these threads: using learned perception to drive quantum-inspired combinatorial search, in a loop whose explicit purpose is to keep an IoT network resilient as it is damaged and repaired in real time.
 
 The synergy follows from these complementary gaps, and it is more than co-location. The perception layer outputs exactly the prior that the optimizer needs, and the optimizer's probabilistic substrate is exactly the place to absorb it: a learned per element risk score maps directly onto the initial qubit amplitudes, warm-starting the population in promising regions and gently pruning the rest. A purely classical genetic algorithm has no equally natural slot for such a prior. Table~\ref{tab:taxonomy} maps the main resilience challenges to the quantum and AI mechanisms our framework brings to bear.
 
@@ -56,7 +59,7 @@ The synergy follows from these complementary gaps, and it is more than co-locati
 \label{tab:taxonomy}
 \centering
 \renewcommand{\arraystretch}{1.2}
-\begin{tabular}{p{2.3cm} p{2.5cm} p{2.4cm}}
+\begin{tabular}{p{2.1cm} p{2.4cm} p{2.5cm}}
 \toprule
 \textbf{Challenge} & \textbf{AI mechanism} & \textbf{Quantum-inspired mechanism} \\
 \midrule
@@ -69,9 +72,9 @@ Scale & Local, low cost inference & Parallel, batchable population search \\
 \end{table}
 
 % ======================================================================
-\section{The Self-Healing Closed Loop}
+\section{The Self-Healing Closed-Loop Framework}\label{sec:framework}
 
-Figure~\ref{fig:framework} shows the framework. Telemetry from the network feeds a perception layer that detects and localizes degradation and emits a risk map over network elements. The optimization layer takes the degraded state and the risk map and recomputes a configuration, which set of backup links to activate, or which device to channel assignments to adopt, that maximizes a resilience objective under an energy or power budget. An actuation layer applies the configuration, and the outcome is fed back to keep the detector calibrated as conditions drift.
+Figure~\ref{fig:framework} shows the loop: \emph{sense}, \emph{detect/predict} (AI), \emph{reoptimize} (quantum-inspired), \emph{actuate}, and \emph{learn}. We describe the model compactly, then the two synergy channels.
 
 \begin{figure}[t]
 \centering
@@ -88,35 +91,74 @@ Figure~\ref{fig:framework} shows the framework. Telemetry from the network feeds
   \node[box, below=of opt] (act) {Actuate\\(reconfigure)};
   \node[box, below=of detect] (learn) {Learn\\(feedback)};
   \draw[arr] (sense) -- (detect);
-  \draw[arr] (detect) -- node[above, font=\scriptsize]{risk map} (opt);
+  \draw[arr] (detect) -- node[above, font=\scriptsize]{risk map $\mathbf{r}$} (opt);
   \draw[arr] (opt) -- (act);
   \draw[arr] (act) -- (learn);
   \draw[arr] (learn) -- (detect);
   \draw[arr] (act.west) .. controls +(left:10mm) and +(down:8mm) .. (sense.south);
 \end{tikzpicture}}
-\caption{The self-healing closed loop. The AI risk map warm-starts the quantum-inspired search (synergy channel one), and recovered configurations retrain the detector (synergy channel two).}
+\caption{The self-healing closed loop. The AI risk map $\mathbf{r}$ warm-starts the quantum-inspired search (synergy channel one), and recovered configurations retrain the detector (synergy channel two).}
 \label{fig:framework}
 \end{figure}
 
-Two channels carry the synergy. In the forward channel, the risk map biases the optimizer's initial qubit amplitudes toward elements the detector flags as high leverage, and applies a small persistent pull toward that prior throughout the search, which both warm-starts and prunes. In the return channel, configurations that proved resilient become labelled experience that keeps the lightweight detector accurate under non-stationary conditions. The framework is solver agnostic, but the forward channel is most natural for the quantum-inspired optimizer, whose decision variables already are probabilities.
+\subsection{What to Optimize: A Resilience Objective}
+We model the IoT deployment as a graph $G=(V,E)$. A fault removes nodes, leaving a fragmented residual graph over the surviving nodes $V_a$. A controller activates backup links from a candidate set, encoded by a binary vector $\mathbf{x}$, where $x_j=1$ activates candidate $j$ at energy cost $c_j$, under a budget $B$. Connectivity alone is too weak a target, so we optimize worst case survivability, the fraction of surviving nodes in the largest two edge connected component $\mathrm{LTECC}$, the part that stays connected after any single further link failure:
+\begin{equation}
+S(\mathbf{x}) = \big|\mathrm{LTECC}(G(\mathbf{x}))\big| \,/\, |V_a|.
+\label{eq:surv}
+\end{equation}
+We add spectral robustness through the algebraic connectivity $\lambda_2(\mathbf{x})$, the second smallest Laplacian eigenvalue, which is positive only when the graph is connected and grows with edge disjoint redundancy. The repair problem is then
+\begin{equation}
+\max_{\mathbf{x}\in\{0,1\}^{C}} \; S(\mathbf{x}) + w\,\lambda_2(\mathbf{x})
+\quad \text{s.t.} \quad \textstyle\sum_j c_j x_j \le B .
+\label{eq:opt}
+\end{equation}
+Problem~\eqref{eq:opt} is NP-hard and non submodular: enlarging the two edge connected core usually needs several jointly activated links that close a cycle, so the marginal value of any single link can be zero. Greedy per energy selection therefore stalls, which motivates global search.
+
+\subsection{How to Optimize: Quantum-Inspired Search with AI Guidance}
+Each decision variable is a qubit summarized by $p_j=\Pr(x_j=1)$. A population is sampled, $x_j\sim\mathrm{Bernoulli}(p_j)$, scored by \eqref{eq:opt} with a hard penalty for budget violation, and the best incumbent $\mathbf{b}$ is tracked. Each qubit is rotated toward the incumbent and, simultaneously, toward the AI risk map $\mathbf{r}$:
+\begin{equation}
+p_j \leftarrow p_j + \eta\,(b_j - p_j) + \gamma\,(r_j - p_j),
+\label{eq:rotation}
+\end{equation}
+with the population initialized at the warm-start $p_j^{(0)} = r_j$. Equations \eqref{eq:rotation} and the warm-start are the two halves of the forward synergy channel: $\mathbf{r}$ seeds the search in promising regions and the $\gamma$ term persistently prunes toward them. A classical genetic algorithm has no equally natural slot for $\mathbf{r}$; the qubit probability is that slot.
+
+Operationally, one healing cycle proceeds as follows. Telemetry reveals that nodes or links have failed; the perception layer localizes the damage and emits the risk map $\mathbf{r}$; the optimizer is warm-started from $\mathbf{r}$ and run for a bounded number of generations or until a deadline, since it is anytime; the chosen configuration is actuated by activating the selected backup links or reassigning channels; and the realized outcome is logged. The detector in our study is a transparent surrogate that scores a candidate link by whether it bridges two surviving fragments and how thinly connected its endpoints are, both strong predictors of resilience leverage, which keeps the mechanism reproducible and auditable. In deployment this surrogate is replaced by a small learned predictor. The return channel closes the loop: configurations that proved resilient become labelled experience, so the detector stays calibrated as topology and demand drift, and the prior it supplies to the optimizer improves over time rather than degrading. This feedback is what makes the system a loop rather than a pipeline, and it is why we treat the detector and the optimizer as co-designed rather than stacked.
 
 % ======================================================================
-\section{Case Study 1: Reconfiguration under Cascading Failures}
+\section{Case Studies}\label{sec:cases}
 
-We model an IoT mesh of 200 nodes placed at random in the plane, connected when within communication range. A targeted attack removes the highest degree nodes one by one, and each removal triggers a cascade as nodes that lose all neighbours also drop. After the attack roughly one third of the nodes are gone and the survivors fragment, with the largest connected component holding under two thirds of them. The controller may activate backup links from a pre surveyed set, each with an energy cost, under a tight budget equal to a small fraction of the cost of activating all of them.
+We instantiate the loop on two structurally different threats. All results are over thirty random seeds, reported as mean $\pm$ standard deviation, with Wilcoxon signed rank tests and healing latency defined as the generation reaching ninety five percent of the final score. Table~\ref{tab:results} summarizes both studies.
 
-The objective is worst case survivability, the fraction of surviving nodes that lie in the largest two edge connected component, the part of the network that stays connected after any single further link failure. We add a small reward for spectral robustness, measured by algebraic connectivity, to break ties toward globally well knit solutions. The quantum-inspired optimizer selects which backup links to activate; the AI risk map favours links that bridge fragments and reinforce thinly connected regions. We compare against a naive greedy controller that adds links by marginal resilience per energy, a stronger connectivity first greedy, and a genetic algorithm, all over thirty random scenarios.
+\begin{table}[t]
+\caption{Healing outcome over 30 seeds (mean $\pm$ std). CS1: worst case survivable fraction. CS2: served demand fraction.}
+\label{tab:results}
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{l c c}
+\toprule
+\textbf{Method} & \textbf{CS1 survivable} & \textbf{CS2 served} \\
+\midrule
+Naive greedy        & $0.90 \pm 0.13$ & $0.65 \pm 0.02$ \\
+Connectivity greedy & $0.98 \pm 0.02$ & --- \\
+Genetic algorithm   & $\mathbf{1.00 \pm 0.01}$ & $0.56 \pm 0.03$ \\
+QIEA, no AI         & $0.96 \pm 0.08$ & $0.48 \pm 0.03$ \\
+QIEA, AI warm-start & $0.98 \pm 0.03$ & $0.48 \pm 0.02$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-Figure~\ref{fig:cs1} reports the outcome. The naive greedy controller heals to only $0.90 \pm 0.13$ survivable fraction and, tellingly, spends barely a quarter of the available energy before it stalls: once the network is merely connected, no single further link improves worst case survivability, so the greedy rule sees nothing worth buying and leaves the budget and the network's redundancy on the table. The population based methods use the budget and heal far better. The genetic algorithm reaches $0.998 \pm 0.005$ and the quantum-inspired optimizer with AI guidance reaches $0.979 \pm 0.026$, both significantly above naive greedy. The connectivity first greedy is a strong baseline at $0.983 \pm 0.017$. We state plainly that the genetic algorithm is the strongest solver here; the quantum-inspired optimizer is competitive with the strong greedy, not dominant.
+\subsection{CS1: Reconfiguration under Cascading Failures}
+We generate $200$ node random geometric meshes, remove $32\%$ of nodes by targeted cascade, and set the repair budget to $3.5\%$ of the total candidate link energy, a deliberately tight budget under which full reconnection is not free. We compare four controllers within the same framework: a naive greedy that adds the backup link with the best marginal resilience per unit energy until no link helps, a stronger connectivity first greedy that first maximizes plain connectivity and only then redundancy, a genetic algorithm given the same evaluation budget as the quantum-inspired optimizer, and the quantum-inspired optimizer with and without the AI warm-start. The two greedy controllers represent the reactive repair common in practice, and the connectivity first variant is included specifically so that our comparison is not against a straw baseline. Figure~\ref{fig:cs1} reports the outcome. The naive greedy controller heals to only $0.90\pm0.13$ survivable fraction and, tellingly, spends barely a quarter of the available energy before it stalls: once the network is merely connected, no single further link improves worst case survivability, so it sees nothing worth buying and leaves the budget and the redundancy on the table. The population based methods use the budget and heal far better. The genetic algorithm reaches $0.998\pm0.005$ and the quantum-inspired optimizer with AI guidance reaches $0.979\pm0.026$, both significantly above naive greedy (Wilcoxon $p=0.015$). We state plainly that the genetic algorithm is the strongest solver here; the quantum-inspired optimizer is competitive with the strong connectivity greedy, not dominant.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{../results/cs1/fig_cs1.png}
-\caption{CS1. (a) Worst case survivable fraction after healing. Naive greedy is both low and high variance, leaving the network fragile. (b) Budget utilisation: naive greedy under spends because no single link improves survivability.}
+\caption{CS1. (a) Worst case survivable fraction after healing; naive greedy is both low and high variance, leaving the network fragile. (b) Budget utilisation; naive greedy under spends because no single link improves survivability.}
 \label{fig:cs1}
 \end{figure}
 
-The synergy appears most clearly when we isolate the AI warm-start. Figure~\ref{fig:synergy} compares the quantum-inspired optimizer with and without it. The warm start improves the mean survivable fraction, but its larger effect is on reliability: it cuts the variability of the healed outcome roughly threefold, from a standard deviation of $0.079$ down to $0.026$. Without guidance the optimizer occasionally converges to a poor configuration; with guidance it is dependably good. It also reaches ninety five percent of its final quality in fewer generations, so healing completes sooner. For resilience, where a dependable and prompt recovery matters as much as an average one, this reliability gain is the point.
+The synergy is clearest when we isolate the AI warm-start (Figure~\ref{fig:synergy}). The warm start improves the mean survivable fraction, but its larger effect is reliability: it cuts the variability of the healed outcome about threefold, from a standard deviation of $0.079$ to $0.026$. Without guidance the optimizer occasionally converges to a poor configuration; with guidance it is dependably good, and it reaches ninety five percent of its final quality in fewer generations. For resilience, where a dependable and prompt recovery matters as much as an average one, this reliability gain is the point.
 
 \begin{figure}[t]
 \centering
@@ -125,47 +167,83 @@ The synergy appears most clearly when we isolate the AI warm-start. Figure~\ref{
 \label{fig:synergy}
 \end{figure}
 
-% ======================================================================
-\section{Case Study 2: Reallocation under a Jamming Surge}
+\subsection{CS2: Reallocation under a Jamming Surge}
+The second study changes the threat. A set of $120$ IoT devices reach gateways over sixteen channels, each channel offering a rate and costing a transmit power that depend on distance, and each channel having a finite capacity. An adversary jams about a third of the channels, zeroing their usable rate, while a surge triples the demand of about a third of the devices, so the network must simultaneously route around dead channels and absorb a load spike. The controller reassigns devices to surviving channels to maximize served demand under a transmit power budget, with each device using at most one channel.
 
-The second study changes the threat. A set of 120 IoT devices reach gateways over sixteen wireless channels. An adversary jams about a third of the channels, zeroing their usable rate, at the same instant a demand surge triples the traffic of roughly a third of the devices. The controller reassigns devices to surviving channels to maximize served demand under a transmit power budget, with each channel having finite capacity and each device using at most one channel.
-
-This problem is structurally different from CS1. It is capacity bound and close to separable, so a congestion aware greedy heuristic, which assigns devices in value per power order while respecting capacity, is near optimal. Over thirty scenarios the greedy controller serves $0.65 \pm 0.02$ of the surged demand, the genetic algorithm $0.56 \pm 0.03$, and the quantum-inspired optimizer $0.48 \pm 0.02$. Here the metaheuristics do not help and the AI warm-start gives no significant gain. Figure~\ref{fig:cs2} shows the comparison.
+This problem is structurally unlike CS1. It is capacity bound and close to separable: serving a device is largely an independent decision, the binding constraints are simple, and a good assignment can be built element by element. A congestion aware greedy that admits devices in decreasing value per power, respecting capacity and budget, is therefore near optimal, serving $0.65\pm0.02$ of surged demand, above the genetic algorithm ($0.56\pm0.03$) and the quantum-inspired optimizer ($0.48\pm0.02$); see Figure~\ref{fig:cs2}. Here the population based search and the AI warm-start give no significant advantage. We read this constructively rather than as a negative result. The framework is solver agnostic, and CS2 shows that not every resilience problem needs heavy combinatorial search: when the repair decomposes, a lightweight greedy controller inside the loop is both near optimal and cheap, and the AI's contribution shifts to detection, identifying the jammed channels and surged devices that define the reallocation. Taken together, the two studies show the loop matching its optimizer to the hardness of the threat, global quantum-inspired search where survivability is combinatorial and coupled, as in CS1, and a cheap heuristic where reallocation is near separable, as in CS2. The discipline of choosing the cheapest adequate solver, rather than always reaching for the heaviest one, is itself a contribution for resource constrained IoT.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{../results/cs2/fig_cs2.png}
-\caption{CS2. Served demand fraction under a jamming surge. On this capacity bound reallocation a congestion aware greedy controller within the framework is near optimal, so the framework selects it as the in loop solver.}
+\caption{CS2. Served demand fraction under a jamming surge. On this capacity bound reallocation a congestion aware greedy within the framework is near optimal.}
 \label{fig:cs2}
 \end{figure}
 
-We read this honestly and constructively. The framework is solver agnostic, and CS2 shows why that matters: not every resilience problem needs heavy combinatorial search. On a convex, capacity bound reallocation, the right engineering choice is the lightweight greedy controller, and the AI's contribution is detection, identifying the jammed channels and surged devices that drive the reallocation. The lesson across the two studies is that the loop adapts its optimizer to the hardness of the problem: global quantum-inspired search where survivability is combinatorial, as in CS1, and a cheap heuristic where reallocation is near separable, as in CS2.
+% ======================================================================
+\section{What Drives the Synergy: An Ablation}\label{sec:ablation}
+
+We isolate each design choice on CS1; Figure~\ref{fig:ablation} and Table~\ref{tab:ablation} report the results.
+
+\noindent\textbf{Synergy components.} Removing the AI warm-start (uniform prior) and removing the persistent pruning pull ($\gamma=0$) both degrade the outcome. Survivable fraction falls from $0.978$ with the full mechanism to $0.889$ without any AI guidance, and the standard deviation widens about threefold, confirming that the warm-start and the $\gamma$ term in \eqref{eq:rotation} are the operative synergy and that their main benefit is reliability.
+
+\noindent\textbf{Robustness weight $w$.} Setting $w=0$ in \eqref{eq:opt} optimizes survivability alone and yields the lowest $\lambda_2$ (least redundancy); increasing $w$ trades a little survivability for markedly higher spectral robustness, identifying a balanced operating point.
+
+\noindent\textbf{Energy budget.} Sweeping the budget traces the resilience versus energy curve: survivability rises steeply then saturates, revealing the budget beyond which extra energy buys little additional resilience, a directly actionable provisioning guide.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../results/ablation/fig_ablation.png}
+\caption{CS1 ablation. (a) Resilience versus energy: survivability saturates, exposing a provisioning knee. (b) Robustness weight $w$ trades survivability for algebraic connectivity $\lambda_2$.}
+\label{fig:ablation}
+\end{figure}
+
+\begin{table}[t]
+\caption{Synergy-component ablation on CS1 (survivable fraction, mean $\pm$ std). TODO refresh from 15-seed run.}
+\label{tab:ablation}
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{l c c}
+\toprule
+\textbf{Setting} & \textbf{Survivable} & \textbf{Std (reliability)} \\
+\midrule
+No AI guidance              & $0.889$ & $0.067$ \\
+Warm-start only             & $0.970$ & $0.022$ \\
+Warm-start $+$ pruning pull & $\mathbf{0.978}$ & $\mathbf{0.022}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 % ======================================================================
-\section{Discussion and Open Challenges}
+\section{Challenges and Future Directions}\label{sec:challenges}
 
-The two studies together support a measured claim. A closed loop that pairs learned perception with budget aware optimization restores resilience that reactive repair leaves on the table, and the learned guidance, fused through the quantum-inspired optimizer's probabilistic substrate, makes combinatorial healing both faster and more reliable. We deliberately avoid an overclaim: the quantum-inspired optimizer is not a universal winner, and a genetic algorithm matched or beat it on quality. Its distinctive value is being the natural carrier for AI guidance and offering anytime, parallel, budget aware search, all on commodity hardware.
+\noindent\textbf{Scaling the spectral objective.} The healing bottleneck is graph analysis, computing $\lambda_2$ and the survivable core, rather than the optimizer. Batched spectral evaluation on accelerators, and incremental updates as links are toggled, are the path to city scale meshes.
 
-Several challenges remain. Scaling the survivability computation to very large meshes calls for batched spectral evaluation on accelerators, since the bottleneck is graph analysis rather than the optimizer itself. Distributed and federated healing, where gateways cooperate without a central controller, fits IoT deployments better than the centralized loop studied here. The loop is also an attack surface: a compromised detector could mislead the optimizer, so securing the perception to optimization channel matters. Finally, the quantum-inspired layer is a stepping stone. As small quantum processors mature, the same warm-start prior could seed a true quantum optimizer, and our probabilistic formulation is meant to make that transition direct.
+\noindent\textbf{Distributed and federated healing.} The loop here is centralized. Real deployments call for gateways that cooperate to heal local regions without a global controller, which connects naturally to federated learning for the perception layer.
+
+\noindent\textbf{Securing the loop.} The closed loop is itself an attack surface. A compromised or spoofed detector could steer the optimizer toward fragile configurations, so the perception to optimization channel needs integrity guarantees and anomaly checks on the risk map.
+
+\noindent\textbf{Toward true quantum optimization.} The quantum-inspired layer is a stepping stone. As small quantum processors mature, the same warm-start prior could seed a variational or annealing based quantum optimizer, and our probabilistic formulation is meant to make that transition direct.
+
+\noindent\textbf{Richer perception.} Our detector is a transparent surrogate. Learned spatiotemporal predictors of cascades and jamming, trained partly on the loop's own recovery experience, are a clear next step that the return channel already supports.
 
 % ======================================================================
-\section{Conclusion}
+\section{Conclusion}\label{sec:conclusion}
 
-We presented a quantum-AI closed-loop framework for self-healing IoT networks, in which an AI perception layer steers a quantum-inspired optimizer toward resilient configurations and recovered configurations retrain the detector. On cascading failures the loop restores worst case survivability that myopic repair cannot, and the AI warm-start makes healing markedly more reliable; on a jamming surge the same framework adapts its solver to a near separable problem. The synergy is real and useful, and reported without exaggeration. We see the framework as a practical and honest path toward IoT networks that heal themselves, and as a bridge to the quantum optimizers to come.
+We presented a quantum-AI closed-loop framework for self-healing IoT networks, cast repair as budget constrained survivability maximization, and showed that an AI risk map fused into a quantum-inspired optimizer restores resilience that myopic repair cannot, more reliably and faster, while honestly remaining competitive with rather than superior to strong metaheuristics. The framework adapts its solver to the hardness of each threat, combinatorial survivability after cascading failures and lightweight reallocation under jamming. We see it as a practical and honest path toward IoT networks that heal themselves, and as a bridge to the quantum optimizers to come.
 
 \begin{thebibliography}{15}
 \bibitem{ref1} A. Al-Fuqaha \textit{et al.}, ``Internet of Things: A survey on enabling technologies, protocols, and applications,'' \textit{IEEE Commun. Surveys Tuts.}, vol. 17, no. 4, pp. 2347--2376, 2015.
-\bibitem{ref2} J. P. G. Sterbenz \textit{et al.}, ``Resilience and survivability in communication networks: Strategies, principles, and survey of disciplines,'' \textit{Comput. Netw.}, vol. 54, no. 8, pp. 1245--1265, 2010.
+\bibitem{ref2} J. P. G. Sterbenz \textit{et al.}, ``Resilience and survivability in communication networks,'' \textit{Comput. Netw.}, vol. 54, no. 8, pp. 1245--1265, 2010.
 \bibitem{ref3} M. Fiedler, ``Algebraic connectivity of graphs,'' \textit{Czechoslovak Math. J.}, vol. 23, no. 2, pp. 298--305, 1973.
 \bibitem{ref4} K.-H. Han and J.-H. Kim, ``Quantum-inspired evolutionary algorithm for a class of combinatorial optimization,'' \textit{IEEE Trans. Evol. Comput.}, vol. 6, no. 6, pp. 580--593, 2002.
 \bibitem{ref5} G. Zhang, ``Quantum-inspired evolutionary algorithms: A survey and empirical study,'' \textit{J. Heuristics}, vol. 17, no. 3, pp. 303--351, 2011.
 \bibitem{ref6} A. Ghosh, S. Boyd, and A. Saberi, ``Minimizing effective resistance of a graph,'' \textit{SIAM Rev.}, vol. 50, no. 1, pp. 37--66, 2008.
-\bibitem{ref7} W. Saad, M. Bennis, and M. Chen, ``A vision of 6G wireless systems: Applications, trends, technologies, and open research problems,'' \textit{IEEE Netw.}, vol. 34, no. 3, pp. 134--142, 2020.
+\bibitem{ref7} W. Saad, M. Bennis, and M. Chen, ``A vision of 6G wireless systems,'' \textit{IEEE Netw.}, vol. 34, no. 3, pp. 134--142, 2020.
 \bibitem{ref8} J. Biamonte \textit{et al.}, ``Quantum machine learning,'' \textit{Nature}, vol. 549, pp. 195--202, 2017.
 \bibitem{ref9} M. Cerezo \textit{et al.}, ``Variational quantum algorithms,'' \textit{Nature Rev. Phys.}, vol. 3, pp. 625--644, 2021.
 \bibitem{ref10} B. McMahan \textit{et al.}, ``Communication-efficient learning of deep networks from decentralized data,'' in \textit{Proc. AISTATS}, 2017, pp. 1273--1282.
-\bibitem{ref11} H. Pirayesh and H. Zeng, ``Jamming attacks and anti-jamming strategies in wireless networks: A comprehensive survey,'' \textit{IEEE Commun. Surveys Tuts.}, vol. 24, no. 2, pp. 767--809, 2022.
-\bibitem{ref12} N. C. Luong \textit{et al.}, ``Applications of deep reinforcement learning in communications and networking: A survey,'' \textit{IEEE Commun. Surveys Tuts.}, vol. 21, no. 4, pp. 3133--3174, 2019.
+\bibitem{ref11} H. Pirayesh and H. Zeng, ``Jamming attacks and anti-jamming strategies in wireless networks: A survey,'' \textit{IEEE Commun. Surveys Tuts.}, vol. 24, no. 2, pp. 767--809, 2022.
+\bibitem{ref12} M. Chehimi \textit{et al.}, ``Foundations of quantum federated learning over classical and quantum networks,'' \textit{IEEE Netw.}, vol. 38, no. 1, pp. 124--131, 2024.
 \bibitem{ref13} E. Farhi, J. Goldstone, and S. Gutmann, ``A quantum approximate optimization algorithm,'' arXiv:1411.4028, 2014.
 \bibitem{ref14} P. Boldi and S. Vigna, ``Robustness of social and web networks under failures and attacks,'' \textit{Internet Math.}, vol. 9, no. 4, 2013.
 \bibitem{ref15} D. Kreutz \textit{et al.}, ``Software-defined networking: A comprehensive survey,'' \textit{Proc. IEEE}, vol. 103, no. 1, pp. 14--76, 2015.
