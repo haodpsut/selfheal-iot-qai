@@ -16,8 +16,8 @@
 
 \title{Self-Healing IoT Networks: A Quantum-AI Closed-Loop Framework for Resilience}
 
-\author{Do Phuc Hao and collaborators%
-\thanks{D. P. Hao is with the Center for AI Innovation, Research, and Application (CAIRA), Da Nang Architecture University, Da Nang, Vietnam (e-mail: haodp.sut@gmail.com).}%
+\author{Do Phuc Hao%
+\thanks{D. P. Hao is with the Center for AI Innovation, Research, and Application (CAIRA), and with Da Nang Architecture University (DAU), Da Nang, Vietnam (e-mail: haodp.sut@gmail.com).}%
 \thanks{Manuscript submitted to the IEEE Network Special Issue on Quantum-AI Synergies Empowering IoT Network Resilience.}}
 
 \maketitle
@@ -112,27 +112,91 @@ Figure~\ref{fig:framework} shows the loop: \emph{sense}, \emph{detect/predict} (
 \label{fig:framework}
 \end{figure}
 
-\subsection{What to Optimize: A Resilience Objective}
-We model the IoT deployment as a graph $G=(V,E)$. A fault removes nodes, leaving a fragmented residual graph over the surviving nodes $V_a$. A controller activates backup links from a candidate set, encoded by a binary vector $\mathbf{x}$, where $x_j=1$ activates candidate $j$ at energy cost $c_j$, under a budget $B$. Connectivity alone is too weak a target, so we optimize worst case survivability, the fraction of surviving nodes in the largest two edge connected component $\mathrm{LTECC}$, the part that stays connected after any single further link failure:
+\subsection{Notation and Fault Model}
+We model the IoT deployment as an undirected graph $G=(V,E)$ with $n=|V|$ nodes. A fault event removes a node set $V_f\subseteq V$; under the targeted cascade we study, the highest degree node is removed repeatedly and any node left with no surviving neighbour is dropped, leaving the surviving set $V_a=V\setminus V_f$ and the residual graph $G_a=(V_a,E_a)$, where $E_a=\{(u,v)\in E : u,v\in V_a\}$. Let $\mathcal{C}=\{e_1,\dots,e_C\}$ be a pre surveyed set of candidate backup links among $V_a$, each $e_j$ carrying an activation energy $c_j>0$. A repair is a binary vector $\mathbf{x}\in\{0,1\}^{C}$ with $x_j=1$ activating $e_j$, producing the healed graph
 \begin{equation}
-S(\mathbf{x}) = \big|\mathrm{LTECC}(G(\mathbf{x}))\big| \,/\, |V_a|.
+G(\mathbf{x}) = \big(V_a,\; E_a \cup \{\,e_j : x_j=1\,\}\big),
+\label{eq:healed}
+\end{equation}
+constrained by an energy budget $B$.
+
+\subsection{Resilience Metrics}
+Plain connectivity is too weak a target, since a tree spanning $V_a$ is connected yet shatters at the first bridge failure. We therefore optimize \emph{worst case survivability}, the fraction of surviving nodes in the largest two edge connected component $\mathrm{LTECC}(\cdot)$, the maximal subgraph with no bridge and hence the part guaranteed to remain connected after any single further link failure:
+\begin{equation}
+S(\mathbf{x}) = \big|\mathrm{LTECC}(G(\mathbf{x}))\big| \,/\, |V_a| \in [0,1].
 \label{eq:surv}
 \end{equation}
-We add spectral robustness through the algebraic connectivity $\lambda_2(\mathbf{x})$, the second smallest Laplacian eigenvalue, which is positive only when the graph is connected and grows with edge disjoint redundancy. The repair problem is then
+$\mathrm{LTECC}$ is computed by finding bridges with a linear time depth first traversal, deleting them, and taking the largest remaining component. As a smooth complement we use spectral robustness. With degree matrix $\mathbf{D}(\mathbf{x})$ and adjacency $\mathbf{A}(\mathbf{x})$ of $G(\mathbf{x})$ over $V_a$, the Laplacian is $\mathbf{L}(\mathbf{x})=\mathbf{D}(\mathbf{x})-\mathbf{A}(\mathbf{x})$, and the algebraic connectivity is its second smallest eigenvalue, expressed variationally as
 \begin{equation}
-\max_{\mathbf{x}\in\{0,1\}^{C}} \; S(\mathbf{x}) + w\,\lambda_2(\mathbf{x})
-\quad \text{s.t.} \quad \textstyle\sum_j c_j x_j \le B .
+\lambda_2(\mathbf{x}) = \min_{\substack{\mathbf{v}\neq\mathbf{0},\; \mathbf{v}\perp\mathbf{1}}} \frac{\mathbf{v}^{\top}\mathbf{L}(\mathbf{x})\,\mathbf{v}}{\mathbf{v}^{\top}\mathbf{v}}.
+\label{eq:lambda2}
+\end{equation}
+$\lambda_2(\mathbf{x})>0$ iff $G(\mathbf{x})$ is connected, and it increases with the number of edge disjoint paths, so it rewards redundancy and graceful degradation.
+
+\subsection{Optimization Problem}
+The repair problem maximizes a composite resilience score under the budget:
+\begin{equation}
+\max_{\mathbf{x}\in\{0,1\}^{C}} \; R(\mathbf{x}) = S(\mathbf{x}) + w\,\lambda_2(\mathbf{x})
+\quad \text{s.t.} \quad \textstyle\sum_{j=1}^{C} c_j x_j \le B ,
 \label{eq:opt}
 \end{equation}
-Problem~\eqref{eq:opt} is NP-hard and non submodular: enlarging the two edge connected core usually needs several jointly activated links that close a cycle, so the marginal value of any single link can be zero. Greedy per energy selection therefore stalls, which motivates global search.
-
-\subsection{How to Optimize: Quantum-Inspired Search with AI Guidance}
-Each decision variable is a qubit summarized by $p_j=\Pr(x_j=1)$. A population is sampled, $x_j\sim\mathrm{Bernoulli}(p_j)$, scored by \eqref{eq:opt} with a hard penalty for budget violation, and the best incumbent $\mathbf{b}$ is tracked. Each qubit is rotated toward the incumbent and, simultaneously, toward the AI risk map $\mathbf{r}$:
+with weight $w\ge 0$. Problem~\eqref{eq:opt} is NP-hard and non submodular: enlarging the two edge connected core usually requires several jointly activated links that close a cycle, so the marginal value of any single link can be zero, and greedy per energy selection stalls, which motivates global search. To let the solver explore freely while still honoring the budget, we fold the constraint into a penalized fitness with a large coefficient $\rho$:
 \begin{equation}
-p_j \leftarrow p_j + \eta\,(b_j - p_j) + \gamma\,(r_j - p_j),
+F(\mathbf{x}) = R(\mathbf{x}) - \rho\,\frac{\max\!\big(0,\; \sum_j c_j x_j - B\big)}{B},
+\label{eq:fitness}
+\end{equation}
+so any over budget solution is pushed strictly below every feasible one.
+
+\subsection{Quantum-Inspired Solver with AI Guidance}
+Each decision variable is a qubit whose state is summarized by the probability $p_j=\Pr(x_j=1)=\sin^2\theta_j$, with $\theta_j$ a rotation angle. A population of probabilistic individuals is \emph{observed} (measured) each generation by sampling
+\begin{equation}
+x_j = \mathbb{1}\!\left[\,u_j < p_j\,\right], \qquad u_j \sim \mathcal{U}(0,1),
+\label{eq:measure}
+\end{equation}
+scoring each sample by $F$ in \eqref{eq:fitness}, and tracking the best incumbent $\mathbf{b}$ seen so far. Every qubit is then rotated toward the incumbent and, simultaneously, toward the AI risk map $\mathbf{r}\in[0,1]^{C}$:
+\begin{equation}
+p_j \leftarrow \Pi_{[p_{\min},p_{\max}]}\!\Big(p_j + \eta\,(b_j - p_j) + \gamma\,(r_j - p_j)\Big),
 \label{eq:rotation}
 \end{equation}
-with the population initialized at the warm-start $p_j^{(0)} = r_j$. Equations \eqref{eq:rotation} and the warm-start are the two halves of the forward synergy channel: $\mathbf{r}$ seeds the search in promising regions and the $\gamma$ term persistently prunes toward them. A classical genetic algorithm has no equally natural slot for $\mathbf{r}$; the qubit probability is that slot.
+where $\Pi$ clips to $[p_{\min},p_{\max}]$ to preserve exploration, $\eta$ is the rotation rate, and $\gamma$ is the prior pull. The population is initialized at the warm-start
+\begin{equation}
+p_j^{(0)} = r_j .
+\label{eq:warmstart}
+\end{equation}
+Equations \eqref{eq:warmstart} and the $\gamma$ term of \eqref{eq:rotation} are the two halves of the forward synergy channel: $\mathbf{r}$ seeds the search in promising regions and then persistently prunes it toward them. The risk map itself is produced by the perception layer, $r_j=\phi(e_j; G_a)$, a per candidate score; our transparent surrogate sets $\phi$ high when $e_j$ bridges two surviving fragments and when its endpoints are thinly connected, both predictive of resilience leverage, and a learned predictor replaces $\phi$ in deployment. A classical genetic algorithm has no equally natural slot for $\mathbf{r}$; the qubit probability $p_j$ is that slot. With population $P$ over $T$ generations, the solver performs $PT$ evaluations of \eqref{eq:fitness}; since each evaluation costs an $O(|V_a|+|E|)$ bridge search and an $O(|V_a|^3)$ eigensolve for \eqref{eq:lambda2}, the resilience evaluation, not the search, dominates and is the scaling bottleneck. Figure~\ref{fig:algo} lays out the full procedure.
+
+\begin{figure}[t]
+\centering
+\resizebox{0.74\columnwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=6mm,
+  blk/.style={draw, rounded corners, align=center, text width=42mm, minimum height=8mm,
+              font=\small, thick, fill=blue!7, drop shadow={opacity=0.18, shadow xshift=0.3mm, shadow yshift=-0.3mm}},
+  io/.style={blk, fill=green!12},
+  ai/.style={blk, fill=orange!16},
+  dec/.style={draw, diamond, aspect=2.4, align=center, font=\small, thick, fill=red!10, inner sep=1pt},
+  a/.style={-{Stealth[length=2.4mm]}, thick},
+  side/.style={font=\scriptsize, text=gray!45!black}]
+  \node[io]  (in)   {\textbf{Input:} degraded graph $G_a$,\\ AI risk map $\mathbf{r}$};
+  \node[ai, below=of in]   (ws)  {Warm-start qubits $p^{(0)}_j = r_j$ \;\eqref{eq:warmstart}};
+  \node[blk, below=of ws]  (meas){Measure population:\\ $x_j=\mathbb{1}[u_j<p_j]$ \;\eqref{eq:measure}};
+  \node[blk, below=of meas](ev)  {Evaluate fitness $F(\mathbf{x})$:\\ survivability $+\,w\lambda_2-$ penalty};
+  \node[blk, below=of ev]  (up)  {Update best incumbent $\mathbf{b}$};
+  \node[ai, below=of up]   (rot) {Rotate $p_j$ toward $\mathbf{b}$ and $\mathbf{r}$ \;\eqref{eq:rotation}};
+  \node[dec, below=7mm of rot] (d){deadline or\\ converged?};
+  \node[io, below=7mm of d](out) {\textbf{Output} $\mathbf{x}^\star$:\\ activate backup links};
+  \draw[a] (in)--(ws);
+  \draw[a] (ws)--(meas);
+  \draw[a] (meas)--(ev);
+  \draw[a] (ev)--(up);
+  \draw[a] (up)--(rot);
+  \draw[a] (rot)--(d);
+  \draw[a] (d)--(out) node[midway,right,side]{yes};
+  \draw[a] (d.west) -- ++(-2.2,0) node[midway,above,side]{no} |- (meas.west);
+\end{tikzpicture}}
+\caption{The AI-guided quantum-inspired solver. The AI risk map $\mathbf{r}$ enters twice: once as the warm-start \eqref{eq:warmstart} and again as the persistent pull in the rotation update \eqref{eq:rotation}. The solver is anytime, so the deadline test can fire at any iteration.}
+\label{fig:algo}
+\end{figure}
 
 Two properties make this engine practical for IoT. It is \emph{anytime}: because the population always holds a best feasible incumbent, the controller can be interrupted at any generation and still actuate a usable configuration, which matters when a deadline is set by how fast the network is degrading. It is also naturally \emph{parallel and batchable}: a whole population is evaluated independently, so the per generation cost is dominated not by the optimizer but by the resilience evaluation, computing the survivable core and the algebraic connectivity for each candidate. That evaluation, rather than the search, is the scaling bottleneck, and it is amenable to batched linear algebra on accelerators, a point we return to among the open challenges.
 
