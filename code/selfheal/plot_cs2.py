@@ -37,12 +37,20 @@ def main():
     std = [np.std(data[m]) for m in methods]
     cols = [COLORS[m] for m in methods]
 
-    fig, ax = plt.subplots(figsize=(5, 3.4))
-    ax.bar(methods, mean, yerr=std, color=cols, capsize=3)
+    fig, ax = plt.subplots(figsize=(5.2, 3.6))
+    bars = ax.bar(methods, mean, yerr=std, color=cols, capsize=3,
+                  edgecolor="black", linewidth=0.5)
+    for b, v in zip(bars, mean):
+        ax.text(b.get_x() + b.get_width() / 2, b.get_height(), f"{v:.2f}",
+                ha="center", va="bottom", fontsize=8)
     ax.set_ylabel("served-demand fraction")
-    ax.set_ylim(0, 1.0)
+    ax.set_ylim(0, 0.85)
     ax.set_title("CS2: reallocation under a jamming surge")
-    ax.tick_params(axis="x", rotation=20)
+    ax.tick_params(axis="x", rotation=15)
+    ax.grid(axis="y", alpha=0.25, linestyle=":")
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     fig.tight_layout()
     fig.savefig(OUT, dpi=200)
     print(f"wrote {OUT}")

@@ -43,20 +43,36 @@ def main():
     cols = [COLORS[m] for m in methods]
     labels = ["no AI", "AI warm-start"]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 3.2))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 3.3))
+
+    def annotate(ax, bars, vals, fmt):
+        for b, v in zip(bars, vals):
+            ax.text(b.get_x() + b.get_width() / 2, b.get_height(), fmt.format(v),
+                    ha="center", va="bottom", fontsize=9)
 
     lat_m = [np.mean(data[m]["latency"]) for m in methods]
     lat_s = [np.std(data[m]["latency"]) for m in methods]
-    ax1.bar(labels, lat_m, yerr=lat_s, color=cols, capsize=4)
+    b1 = ax1.bar(labels, lat_m, yerr=lat_s, color=cols, capsize=4,
+                 edgecolor="black", linewidth=0.5)
+    annotate(ax1, b1, lat_m, "{:.0f}")
     ax1.set_ylabel("healing latency (generations to 95%)")
+    ax1.set_ylim(0, max(lat_m) * 1.3)
     ax1.set_title("(a) Faster healing")
 
     q_m = [np.mean(data[m][qkey]) for m in methods]
     q_s = [np.std(data[m][qkey]) for m in methods]
-    ax2.bar(labels, q_m, yerr=q_s, color=cols, capsize=4)
+    b2 = ax2.bar(labels, q_m, yerr=q_s, color=cols, capsize=4,
+                 edgecolor="black", linewidth=0.5)
+    annotate(ax2, b2, q_m, "{:.3f}")
     ax2.set_ylabel(qlabel)
-    ax2.set_ylim(0, 1.0)
+    ax2.set_ylim(0, 1.12)
     ax2.set_title("(b) Equal or better quality")
+
+    for ax in (ax1, ax2):
+        ax.grid(axis="y", alpha=0.25, linestyle=":")
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
     fig.suptitle(f"Synergy: AI warm-start into the quantum-inspired optimizer ({cs.upper()})")
     fig.tight_layout()

@@ -9,7 +9,7 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, shadows}
 \usepackage[hidelinks]{hyperref}
 
 \begin{document}
@@ -80,24 +80,26 @@ Figure~\ref{fig:framework} shows the loop: \emph{sense}, \emph{detect/predict} (
 \centering
 \resizebox{\columnwidth}{!}{%
 \begin{tikzpicture}[
-  node distance=8mm and 12mm,
-  box/.style={draw, rounded corners, align=center, minimum height=9mm, minimum width=20mm, fill=blue!6},
-  ai/.style={box, fill=orange!12},
-  qio/.style={box, fill=red!10},
-  arr/.style={-{Stealth[length=2mm]}, thick}]
-  \node[box] (sense) {Sense\\(telemetry)};
-  \node[ai, right=of sense] (detect) {Detect / Predict\\(AI)};
-  \node[qio, right=of detect] (opt) {Reoptimize\\(quantum-inspired)};
-  \node[box, below=of opt] (act) {Actuate\\(reconfigure)};
-  \node[box, below=of detect] (learn) {Learn\\(feedback)};
+  box/.style={draw, rounded corners, align=center, text width=24mm, minimum height=12mm,
+              font=\small, thick, drop shadow={opacity=0.22, shadow xshift=0.4mm, shadow yshift=-0.4mm}},
+  arr/.style={-{Stealth[length=2.6mm]}, thick, line width=0.5mm},
+  fb/.style={-{Stealth[length=2.6mm]}, thick, dashed, line width=0.4mm, gray!65!black},
+  lbl/.style={font=\scriptsize, fill=white, inner sep=1.5pt},
+  flbl/.style={font=\scriptsize\itshape, text=gray!50!black, fill=white, inner sep=1pt}]
+  % five stages around one non-crossing cycle
+  \node[box, fill=blue!9]    (sense)  at (0,2.2)   {\textbf{Sense}\\ {\scriptsize telemetry}};
+  \node[box, fill=orange!22] (detect) at (4.2,2.2) {\textbf{Detect / Predict}\\ {\scriptsize AI perception}};
+  \node[box, fill=red!16]    (opt)    at (8.4,2.2) {\textbf{Reoptimize}\\ {\scriptsize quantum-inspired}};
+  \node[box, fill=blue!9]    (act)    at (8.4,-0.8){\textbf{Actuate}\\ {\scriptsize reconfigure}};
+  \node[box, fill=green!16]  (learn)  at (3.2,-0.8){\textbf{Learn}\\ {\scriptsize feedback}};
   \draw[arr] (sense) -- (detect);
-  \draw[arr] (detect) -- node[above, font=\scriptsize]{risk map $\mathbf{r}$} (opt);
+  \draw[arr] (detect) -- (opt) node[lbl, midway, above]{risk map $\mathbf{r}$};
   \draw[arr] (opt) -- (act);
   \draw[arr] (act) -- (learn);
-  \draw[arr] (learn) -- (detect);
-  \draw[arr] (act.west) .. controls +(left:10mm) and +(down:8mm) .. (sense.south);
+  \draw[arr] (learn) to[out=155, in=-95] (sense) node[flbl, pos=0.62, left=1pt]{sense new state};
+  \draw[fb] (learn) to[out=65, in=-115] (detect) node[flbl, pos=0.6, right=2pt]{retrain detector};
 \end{tikzpicture}}
-\caption{The self-healing closed loop. The AI risk map $\mathbf{r}$ warm-starts the quantum-inspired search (synergy channel one), and recovered configurations retrain the detector (synergy channel two).}
+\caption{The self-healing closed loop. The forward synergy channel (solid): the AI risk map $\mathbf{r}$ warm-starts the quantum-inspired search. The return synergy channel (dashed): recovered configurations retrain the detector. The five stages form one non-crossing cycle.}
 \label{fig:framework}
 \end{figure}
 
@@ -184,7 +186,7 @@ This problem is structurally unlike CS1. It is capacity bound and close to separ
 
 We isolate each design choice on CS1; Figure~\ref{fig:ablation} and Table~\ref{tab:ablation} report the results.
 
-\noindent\textbf{Synergy components.} Removing the AI warm-start (uniform prior) and removing the persistent pruning pull ($\gamma=0$) both degrade the outcome. Survivable fraction falls from $0.978$ with the full mechanism to $0.889$ without any AI guidance, and the standard deviation widens about threefold, confirming that the warm-start and the $\gamma$ term in \eqref{eq:rotation} are the operative synergy and that their main benefit is reliability.
+\noindent\textbf{Synergy components.} This is the most informative ablation. Seeding the optimizer with the AI risk map but then letting it drift, that is, warm-start with $\gamma=0$, barely helps: survivability rises only from $0.892\pm0.132$ without any guidance to $0.902\pm0.128$, and both remain highly variable. The decisive ingredient is the persistent pruning pull: with the full mechanism, warm-start together with the $\gamma$ term in \eqref{eq:rotation}, survivability jumps to $0.978\pm0.026$ and the standard deviation collapses about fivefold. The lesson is specific: it is not enough to point the optimizer at the right region once; the AI prior must keep pruning the search throughout. The synergy is a sustained coupling, and its main payoff is reliability.
 
 \noindent\textbf{Robustness weight $w$.} Setting $w=0$ in \eqref{eq:opt} optimizes survivability alone and yields the lowest $\lambda_2$ (least redundancy); increasing $w$ trades a little survivability for markedly higher spectral robustness, identifying a balanced operating point.
 
@@ -198,17 +200,17 @@ We isolate each design choice on CS1; Figure~\ref{fig:ablation} and Table~\ref{t
 \end{figure}
 
 \begin{table}[t]
-\caption{Synergy-component ablation on CS1 (survivable fraction, mean $\pm$ std). TODO refresh from 15-seed run.}
+\caption{Synergy-component ablation on CS1 over 15 seeds. The persistent pruning pull, not the one shot warm-start, drives both the quality gain and the fivefold reliability gain.}
 \label{tab:ablation}
 \centering
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{l c c}
 \toprule
-\textbf{Setting} & \textbf{Survivable} & \textbf{Std (reliability)} \\
+\textbf{Setting} & \textbf{Survivable (mean)} & \textbf{Std (reliability)} \\
 \midrule
-No AI guidance              & $0.889$ & $0.067$ \\
-Warm-start only             & $0.970$ & $0.022$ \\
-Warm-start $+$ pruning pull & $\mathbf{0.978}$ & $\mathbf{0.022}$ \\
+No AI guidance              & $0.892$ & $0.132$ \\
+Warm-start only             & $0.902$ & $0.128$ \\
+Warm-start $+$ pruning pull & $\mathbf{0.978}$ & $\mathbf{0.026}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
