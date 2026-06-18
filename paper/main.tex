@@ -216,11 +216,11 @@ We instantiate the loop on two structurally different threats. All results are o
 \toprule
 \textbf{Method} & \textbf{CS1 survivable} & \textbf{CS2 served} \\
 \midrule
-Naive greedy        & $0.90 \pm 0.13$ & $0.65 \pm 0.02$ \\
+Naive greedy        & $0.90 \pm 0.13$ & $\mathbf{0.65 \pm 0.02}$ \\
 Connectivity greedy & $0.98 \pm 0.02$ & --- \\
-Genetic algorithm   & $\mathbf{1.00 \pm 0.01}$ & $0.56 \pm 0.03$ \\
+Genetic algorithm   & $\mathbf{1.00 \pm 0.01}$ & $0.55 \pm 0.03$ \\
 QIEA, no AI         & $0.96 \pm 0.08$ & $0.48 \pm 0.03$ \\
-QIEA, AI warm-start & $0.98 \pm 0.03$ & $0.48 \pm 0.02$ \\
+QIEA, AI warm-start & $0.98 \pm 0.03$ & $0.49 \pm 0.03$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -247,7 +247,7 @@ The synergy is clearest when we isolate the AI warm-start (Figure~\ref{fig:syner
 \subsection{CS2: Reallocation under a Jamming Surge}
 The second study changes the threat. A set of $120$ IoT devices reach gateways over sixteen channels, each channel offering a rate and costing a transmit power that depend on distance, and each channel having a finite capacity. An adversary jams about a third of the channels, zeroing their usable rate, while a surge triples the demand of about a third of the devices, so the network must simultaneously route around dead channels and absorb a load spike. The controller reassigns devices to surviving channels to maximize served demand under a transmit power budget, with each device using at most one channel.
 
-This problem is structurally unlike CS1. It is capacity bound and close to separable: serving a device is largely an independent decision, the binding constraints are simple, and a good assignment can be built element by element. A congestion aware greedy that admits devices in decreasing value per power, respecting capacity and budget, is therefore near optimal, serving $0.65\pm0.02$ of surged demand, above the genetic algorithm ($0.56\pm0.03$) and the quantum-inspired optimizer ($0.48\pm0.02$); see Figure~\ref{fig:cs2}. Here the population based search and the AI warm-start give no significant advantage. We read this constructively rather than as a negative result. The framework is solver agnostic, and CS2 shows that not every resilience problem needs heavy combinatorial search: when the repair decomposes, a lightweight greedy controller inside the loop is both near optimal and cheap, and the AI's contribution shifts to detection, identifying the jammed channels and surged devices that define the reallocation. Taken together, the two studies show the loop matching its optimizer to the hardness of the threat, global quantum-inspired search where survivability is combinatorial and coupled, as in CS1, and a cheap heuristic where reallocation is near separable, as in CS2. The discipline of choosing the cheapest adequate solver, rather than always reaching for the heaviest one, is itself a contribution for resource constrained IoT.
+This problem is structurally unlike CS1. It is capacity bound and close to separable: serving a device is largely an independent decision, the binding constraints are simple, and a good assignment can be built element by element. A congestion aware greedy that admits devices in decreasing value per power, respecting capacity and budget, is therefore near optimal, serving $0.65\pm0.02$ of surged demand, above the genetic algorithm ($0.55\pm0.03$) and the quantum-inspired optimizer ($0.49\pm0.03$); see Figure~\ref{fig:cs2}. Here the metaheuristics do not surpass the greedy controller, and the AI warm-start yields only a small gain over its no AI counterpart ($0.481$ to $0.490$), in contrast to the decisive reliability gain it brings in the combinatorial CS1. We read this constructively rather than as a negative result. The framework is solver agnostic, and CS2 shows that not every resilience problem needs heavy combinatorial search: when the repair decomposes, a lightweight greedy controller inside the loop is both near optimal and cheap, and the AI's contribution shifts to detection, identifying the jammed channels and surged devices that define the reallocation. Taken together, the two studies show the loop matching its optimizer to the hardness of the threat, global quantum-inspired search where survivability is combinatorial and coupled, as in CS1, and a cheap heuristic where reallocation is near separable, as in CS2. The discipline of choosing the cheapest adequate solver, rather than always reaching for the heaviest one, is itself a contribution for resource constrained IoT.
 
 \begin{figure}[t]
 \centering
