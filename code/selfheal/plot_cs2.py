@@ -1,11 +1,7 @@
-"""Plot CS2 results into the paper figure (Fig 3).
+"""CS2 figure (Fig 5): device-to-gateway survivable fraction after healing the jammed region.
 
-Reads results/cs2/cs2_results.csv and renders served-demand fraction per method
-(mean +/- std). CS2's honest message: a congestion-aware greedy is strong on this
-capacity-bound reallocation, while the framework still restores most served demand and
-the AI warm-start helps the quantum-inspired optimizer.
-
-    python plot_cs2.py
+Publication-quality bar chart with a significance bracket on the AI-synergy comparison.
+Run after run_cs2.py:  python plot_cs2.py
 """
 
 from __future__ import annotations
@@ -13,18 +9,15 @@ import os
 import csv
 from collections import defaultdict
 import numpy as np
-import matplotlib
 
-matplotlib.use("Agg")
+import plotstyle as S
+S.apply()
 import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(__file__)
 CSV = os.path.join(HERE, "..", "..", "results", "cs2", "cs2_results.csv")
 OUT = os.path.join(HERE, "..", "..", "results", "cs2", "fig_cs2.png")
-
 ORDER = ["greedy", "greedy-conn", "GA", "SA", "QIEA-noAI", "QIEA+AI"]
-COLORS = {"greedy": "#b0b0b0", "greedy-conn": "#8aa0c0", "GA": "#6fae6f",
-          "SA": "#9b72c7", "QIEA-noAI": "#e0a05a", "QIEA+AI": "#c0392b"}
 
 
 def main():
@@ -32,28 +25,29 @@ def main():
     with open(CSV) as f:
         for row in csv.DictReader(f):
             data[row["method"]].append(float(row["gw_survivable"]))
-
     methods = [m for m in ORDER if m in data]
-    mean = [np.mean(data[m]) for m in methods]
-    std = [np.std(data[m]) for m in methods]
-    cols = [COLORS[m] for m in methods]
+    means = [np.mean(data[m]) for m in methods]
+    stds = [np.std(data[m]) for m in methods]
 
-    fig, ax = plt.subplots(figsize=(5.6, 3.6))
-    bars = ax.bar(methods, mean, yerr=std, color=cols, capsize=3,
-                  edgecolor="black", linewidth=0.5)
-    for b, v in zip(bars, mean):
-        ax.text(b.get_x() + b.get_width() / 2, b.get_height(), f"{v:.2f}",
-                ha="center", va="bottom", fontsize=8)
+    fig, ax = plt.subplots(figsize=(5.8, 3.7))
+    S.bars(ax, methods, means, stds)
     ax.set_ylabel("device-to-gateway survivable fraction")
-    ax.set_ylim(0, 1.12)
+    ax.set_ylim(0, 1.18)
     ax.set_title("CS2: restoring gateway reachability under link jamming")
-    ax.tick_params(axis="x", rotation=15)
-    ax.grid(axis="y", alpha=0.25, linestyle=":")
-    ax.set_axisbelow(True)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    S.clean(ax)
+
+    # Significance bracket on the synergy comparison (QIEA no-AI vs QIEA+AI).
+    try:
+        from scipy.stats import wilcoxon
+        i, j = methods.index("QIEA-noAI"), methods.index("QIEA+AI")
+        p = wilcoxon(data["QIEA-noAI"], data["QIEA+AI"]).pvalue
+        y = max(means[i] + stds[i], means[j] + stds[j]) + 0.09
+        S.sig_bracket(ax, i, j, y, p)
+    except Exception:
+        pass
+
     fig.tight_layout()
-    fig.savefig(OUT, dpi=200)
+    fig.savefig(OUT)
     print(f"wrote {OUT}")
 
 

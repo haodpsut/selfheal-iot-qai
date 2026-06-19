@@ -13,9 +13,9 @@ import os
 import csv
 from collections import defaultdict
 import numpy as np
-import matplotlib
 
-matplotlib.use("Agg")
+import plotstyle as S
+S.apply()
 import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(__file__)
@@ -78,8 +78,8 @@ def main():
     ax2b.tick_params(axis="y", labelcolor="#2c6fbb")
     ax2.legend(handles=[l1, l2], loc="center right", fontsize=9)
 
-    for ax in (ax1, ax2):
-        ax.spines["top"].set_visible(False)
+    S.clean(ax1, grid=True)
+    ax2.spines["top"].set_visible(False)
 
     fig.tight_layout()
     fig.savefig(OUT, dpi=200)
