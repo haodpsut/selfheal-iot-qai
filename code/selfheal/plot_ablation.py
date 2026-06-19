@@ -50,8 +50,9 @@ def main():
     ax1.errorbar(x, surv_m, yerr=surv_s, marker="o", color="#c0392b", capsize=3,
                  linewidth=2, markersize=6)
     for xi, yi in zip(x, surv_m):
-        ax1.annotate(f"{yi:.3f}", (xi, yi), textcoords="offset points", xytext=(0, 8),
-                     ha="center", fontsize=8)
+        ax1.annotate(f"{yi:.3f}", (xi, yi), textcoords="offset points", xytext=(7, 7),
+                     ha="left", fontsize=8,
+                     bbox=dict(boxstyle="round,pad=0.1", fc="white", ec="none", alpha=0.8))
     ax1.set_xlabel("repair budget (fraction of total link energy)")
     ax1.set_ylabel("survivable fraction")
     ax1.set_title("(a) Resilience vs energy")
