@@ -262,7 +262,7 @@ Unlike a separable reallocation, this is again a combinatorial, non submodular r
 
 We isolate each design choice on CS1; Figure~\ref{fig:ablation} and Table~\ref{tab:ablation} report the results.
 
-\noindent\textbf{Synergy components.} This is the most informative ablation. Seeding the optimizer with the AI risk map but then letting it drift, that is, warm-start with $\gamma=0$, barely helps: survivability rises only from $0.892\pm0.132$ without any guidance to $0.902\pm0.128$, and both remain highly variable. The decisive ingredient is the persistent pruning pull: with the full mechanism, warm-start together with the $\gamma$ term in \eqref{eq:rotation}, survivability jumps to $0.978\pm0.026$ and the standard deviation collapses about fivefold. The lesson is specific: it is not enough to point the optimizer at the right region once; the AI prior must keep pruning the search throughout. The synergy is a sustained coupling, and its main payoff is reliability.
+\noindent\textbf{Synergy components.} This is the most informative ablation. Seeding the optimizer with the AI risk map but then letting it drift, that is, warm-start with $\gamma=0$, barely helps: survivability rises only from $0.923\pm0.112$ without any guidance to $0.929\pm0.104$, and both remain highly variable. The decisive ingredient is the persistent pruning pull: with the full mechanism, warm-start together with the $\gamma$ term in \eqref{eq:rotation}, survivability rises to $0.980\pm0.031$ and the standard deviation collapses more than threefold. The lesson is specific: it is not enough to point the optimizer at the right region once; the AI prior must keep pruning the search throughout. The synergy is a sustained coupling, and its main payoff is reliability.
 
 \noindent\textbf{Robustness weight $w$.} Setting $w=0$ in \eqref{eq:opt} optimizes survivability alone and yields the lowest $\lambda_2$ (least redundancy); increasing $w$ trades a little survivability for markedly higher spectral robustness, identifying a balanced operating point.
 
@@ -276,7 +276,7 @@ We isolate each design choice on CS1; Figure~\ref{fig:ablation} and Table~\ref{t
 \end{figure}
 
 \begin{table}[t]
-\caption{Synergy-component ablation on CS1 over 15 seeds. The persistent pruning pull, not the one shot warm-start, drives both the quality gain and the fivefold reliability gain.}
+\caption{Synergy-component ablation on CS1 over 50 seeds. The persistent pruning pull, not the one shot warm-start, drives both the quality gain and the threefold reliability gain.}
 \label{tab:ablation}
 \centering
 \renewcommand{\arraystretch}{1.2}
@@ -284,9 +284,9 @@ We isolate each design choice on CS1; Figure~\ref{fig:ablation} and Table~\ref{t
 \toprule
 \textbf{Setting} & \textbf{Survivable (mean)} & \textbf{Std (reliability)} \\
 \midrule
-No AI guidance              & $0.892$ & $0.132$ \\
-Warm-start only             & $0.902$ & $0.128$ \\
-Warm-start $+$ pruning pull & $\mathbf{0.978}$ & $\mathbf{0.026}$ \\
+No AI guidance              & $0.923$ & $0.112$ \\
+Warm-start only             & $0.929$ & $0.104$ \\
+Warm-start $+$ pruning pull & $\mathbf{0.980}$ & $\mathbf{0.031}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
