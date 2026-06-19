@@ -58,6 +58,12 @@ matters: no-AI 0.923 ± 0.112 → warm-start-only 0.929 ± 0.104 → **warm-star
 (reliability ~3.6× better). Spectral weight `w` trades survivability for algebraic connectivity;
 repair survivability saturates around a budget of ~5% of total candidate-link energy.
 
+**Bridge to quantum:** the *same* AI risk map that warm-starts the classical optimizer also
+warm-starts a **simulated QAOA** (exact statevector, pure numpy). Encoding the per-link prior
+as the QAOA initial amplitudes (instead of the uniform |+⟩ state) raises the approximation
+ratio at every depth (e.g., 0.93 → 0.96 at *p* = 2) and multiplies the probability of sampling
+the optimum, showing the formulation is genuinely quantum-ready, not merely analogous.
+
 ---
 
 ## Repository layout
@@ -76,10 +82,11 @@ paper--04/
 │       ├── run_cs1.py          # CS1 multi-seed runner  ->  results/cs1/
 │       ├── run_cs2.py          # CS2 multi-seed runner  ->  results/cs2/
 │       ├── run_ablation.py     # ablation runner        ->  results/ablation/
+│       ├── qaoa_demo.py        # bridge-to-quantum: AI prior warm-starts a simulated QAOA
 │       ├── plotstyle.py        # shared publication figure style + significance brackets
 │       └── plot_*.py           # figure generators (read CSVs -> PNGs)
 └── results/
-    ├── cs1/   cs2/   ablation/ # per-seed CSVs (figures are regenerated from these)
+    ├── cs1/  cs2/  ablation/  qaoa/   # per-seed CSVs (figures are regenerated from these)
 ```
 
 ## Method in one paragraph
@@ -113,6 +120,7 @@ tmux new -s selfheal
 python run_cs1.py 50 6        # -> results/cs1/cs1_results.csv (+ histories)
 python run_cs2.py 50 6        # -> results/cs2/cs2_results.csv
 python run_ablation.py 50 6   # -> results/ablation/ablation.csv
+python qaoa_demo.py 20 3      # -> results/qaoa/qaoa_results.csv (bridge-to-quantum)
 ```
 
 > The runners pin BLAS to one thread per worker (`OMP_NUM_THREADS=1` etc., set before numpy

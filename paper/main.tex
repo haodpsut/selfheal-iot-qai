@@ -18,7 +18,8 @@
 
 \author{Phuc Hao Do%
 \thanks{P. H. Do is with the Center for AI Innovation, Research, and Application (CAIRA), and with Da Nang Architecture University (DAU), Da Nang, Vietnam (e-mail: haodp.sut@gmail.com).}%
-\thanks{Manuscript submitted to the IEEE Network Special Issue on Quantum-AI Synergies Empowering IoT Network Resilience.}}
+\thanks{Manuscript submitted to the IEEE Network Special Issue on Quantum-AI Synergies Empowering IoT Network Resilience.}%
+\thanks{Code and data to reproduce all results are available at \url{https://github.com/haodpsut/selfheal-iot-qai}.}}
 
 \maketitle
 
@@ -39,7 +40,7 @@ Classical recovery tends to be reactive and myopic. A controller that reconnects
 
 Two technologies are maturing that, together, address this gap. Artificial intelligence at the edge, a pillar of emerging 6G network automation \cite{ref7}, can detect and localize degradation in milliseconds from streaming telemetry. Quantum-inspired optimization brings population based, anytime, and highly parallel global search to the combinatorial reconfiguration problem, without requiring a quantum processor. Our thesis is that their synergy, not either one alone, enables genuine self-healing: the learned risk map is the right object to steer a global optimizer, and the optimizer is the right engine to turn that map into a resilient configuration.
 
-We make four contributions. First, we formalize self-healing as a closed loop and cast repair as budget constrained survivability maximization. Second, we identify and instrument a concrete synergy mechanism: the perception layer warm-starts and prunes the quantum-inspired search through its qubit amplitudes, and recovered configurations retrain the detector. Third, we evaluate the loop on two distinct resilience threats with multi seed statistics. Fourth, we provide an ablation that isolates the warm-start, the search-pruning pull, the robustness weight, and the energy budget, and we report an honest portfolio comparison that locates the quantum-inspired optimizer's value in fusion and reliability rather than raw dominance.
+We make four contributions. First, we formalize self-healing as a closed loop and cast repair as budget constrained survivability maximization. Second, we identify and instrument a concrete synergy mechanism: the perception layer warm-starts and prunes the quantum-inspired search through its qubit amplitudes, and recovered configurations retrain the detector. Third, we evaluate the loop on two distinct resilience threats with multi seed statistics. Fourth, we provide an ablation that isolates the warm-start, the search-pruning pull, the robustness weight, and the energy budget, we report an honest portfolio comparison that locates the quantum-inspired optimizer's value in fusion and reliability rather than raw dominance, and we show that the same AI prior warm-starts a simulated QAOA, making the bridge to quantum hardware concrete rather than rhetorical.
 
 % ======================================================================
 \section{Background and Related Work}\label{sec:background}
@@ -61,24 +62,7 @@ Artificial intelligence contributes speed and anticipation. A small model runnin
 
 Quantum-inspired optimization contributes global combinatorial search. Quantum-inspired evolutionary algorithms represent each decision variable as a qubit whose state is a probability, evolve a population of such probabilistic individuals, and rotate them toward the best solutions observed. They run on commodity hardware, scale to large IoT instances, are naturally parallel, and are anytime, returning a usable configuration whenever the deadline arrives. What they lack is any sense of where in a vast search space the good solutions lie.
 
-The synergy follows from these complementary gaps, and it is more than co-location. The perception layer outputs exactly the prior that the optimizer needs, and the optimizer's probabilistic substrate is exactly the place to absorb it: a learned per element risk score maps directly onto the initial qubit amplitudes, warm-starting the population in promising regions and gently pruning the rest. A purely classical genetic algorithm has no equally natural slot for such a prior. Table~\ref{tab:taxonomy} maps the main resilience challenges to the quantum and AI mechanisms our framework brings to bear.
-
-\begin{table}[t]
-\caption{IoT resilience challenges mapped to quantum-AI mechanisms.}
-\label{tab:taxonomy}
-\centering
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{p{2.1cm} p{2.4cm} p{2.5cm}}
-\toprule
-\textbf{Challenge} & \textbf{AI mechanism} & \textbf{Quantum-inspired mechanism} \\
-\midrule
-Cascading node loss & Critical node and cascade prediction & Global survivable reconfiguration \\
-Targeted link jamming & Jammed region localization & Survivable reconfiguration to a gateway \\
-Energy limits & Demand and risk forecasting & Anytime, budget constrained selection \\
-Scale & Local, low cost inference & Parallel, batchable population search \\
-\bottomrule
-\end{tabular}
-\end{table}
+The synergy follows from these complementary gaps, and it is more than co-location. The perception layer outputs exactly the prior that the optimizer needs, and the optimizer's probabilistic substrate is exactly the place to absorb it: a learned per element risk score maps directly onto the initial qubit amplitudes, warm-starting the population in promising regions and gently pruning the rest. A purely classical genetic algorithm has no equally natural slot for such a prior. Concretely, the framework pairs an AI mechanism with a quantum-inspired one across the resilience challenges: cascade prediction with global survivable reconfiguration for node loss, jammed region localization with gateway oriented reconfiguration for link jamming, demand and risk forecasting with anytime budget constrained selection for energy limits, and low cost local inference with parallel population search for scale.
 
 % ======================================================================
 \section{The Self-Healing Closed-Loop Framework}\label{sec:framework}
@@ -220,6 +204,20 @@ Warm-start $+$ pruning pull & $\mathbf{0.980}$ & $\mathbf{0.031}$ \\
 \end{table}
 
 % ======================================================================
+\section{From Quantum-Inspired to Quantum}\label{sec:quantum}
+
+Our optimizer is quantum-inspired and runs on classical hardware, but we chose the formulation so that the same AI guidance transfers to a genuine quantum optimizer, and we test this directly. We take small instances of the budget constrained resilience-selection problem, encode each as a QUBO over $N=12$ qubits, and solve them with the quantum approximate optimization algorithm (QAOA) simulated by exact statevector evolution. The AI risk map enters QAOA exactly as it enters the quantum-inspired optimizer: instead of the usual uniform $|{+}\rangle^{\otimes N}$ initial state, we prepare a biased product state whose per qubit amplitude encodes $r_j$, the quantum analogue of the warm-start $p_j^{(0)}=r_j$.
+
+Figure~\ref{fig:qaoa} compares uniform against AI-prior initialization across QAOA depth $p$, over twenty random instances. The prior helps the quantum optimizer just as it helps the classical one: it raises the approximation ratio at every depth, from $0.93$ to $0.96$ at $p=2$, and roughly triples the probability of sampling the exact optimum. The benefit is already present at $p=1$, the shallow regime that near term hardware can actually run. This is a small, simulation only result and we claim no quantum advantage from it. Its point is narrower and important: the perception layer's output is not tied to our particular classical solver, it is a prior over the decision qubits, and that is exactly what a quantum optimizer consumes. The closed loop is therefore quantum ready by construction, not by analogy.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../results/qaoa/fig_qaoa.png}
+\caption{Bridge to quantum. The same AI risk map that warm-starts the classical optimizer, used as the QAOA initial amplitudes instead of the uniform $|{+}\rangle$ state, improves a simulated QAOA at every depth $p$: (a) higher approximation ratio, (b) higher probability of sampling the optimum (mean $\pm$ std over twenty $12$-qubit instances).}
+\label{fig:qaoa}
+\end{figure}
+
+% ======================================================================
 \section{Challenges and Future Directions}\label{sec:challenges}
 
 \noindent\textbf{Scaling the spectral objective.} The healing bottleneck is graph analysis, computing $\lambda_2$ and the survivable core, rather than the optimizer. Batched spectral evaluation on accelerators, and incremental updates as links are toggled, are the path to city scale meshes.
@@ -228,7 +226,7 @@ Warm-start $+$ pruning pull & $\mathbf{0.980}$ & $\mathbf{0.031}$ \\
 
 \noindent\textbf{Securing the loop.} The closed loop is itself an attack surface. A compromised or spoofed detector could steer the optimizer toward fragile configurations, so the perception to optimization channel needs integrity guarantees and anomaly checks on the risk map.
 
-\noindent\textbf{Toward true quantum optimization.} The quantum-inspired layer is a stepping stone. As small quantum processors mature, the same warm-start prior could seed a variational or annealing based quantum optimizer, and our probabilistic formulation is meant to make that transition direct.
+\noindent\textbf{Toward true quantum optimization.} The quantum-inspired layer is a stepping stone, and Section~\ref{sec:quantum} already shows the same prior helping a simulated QAOA. As quantum processors mature and the per qubit candidate count grows, running the perception-warm-started optimizer on real hardware, and learning the QAOA angles jointly with the prior, is the natural next step.
 
 \noindent\textbf{Richer perception.} Our detector is a transparent surrogate. Learned spatiotemporal predictors of cascades and jamming, trained partly on the loop's own recovery experience, are a clear next step that the return channel already supports.
 
@@ -237,7 +235,7 @@ Warm-start $+$ pruning pull & $\mathbf{0.980}$ & $\mathbf{0.031}$ \\
 % ======================================================================
 \section{Conclusion}\label{sec:conclusion}
 
-We presented a quantum-AI closed-loop framework for self-healing IoT networks, cast repair as budget constrained survivability maximization, and showed across two distinct threats, random cascading failures and targeted link jamming, that an AI risk map fused into a quantum-inspired optimizer restores resilience that myopic repair cannot. The fusion makes healing more reliable and faster on the cascading-failure instances and significantly better on the harder jamming instances, while the optimizer honestly remains competitive with, rather than superior to, a strong genetic search. An ablation pinpoints the mechanism: it is the sustained pull of the AI prior on the probabilistic qubit state, not a one shot warm-start, that drives the gain. We see the framework as a practical and honest path toward IoT networks that heal themselves, and as a bridge to the quantum optimizers to come.
+We presented a quantum-AI closed-loop framework for self-healing IoT networks, cast repair as budget constrained survivability maximization, and showed across two distinct threats, random cascading failures and targeted link jamming, that an AI risk map fused into a quantum-inspired optimizer restores resilience that myopic repair cannot. The fusion makes healing more reliable and faster on the cascading-failure instances and significantly better on the harder jamming instances, while the optimizer honestly remains competitive with, rather than superior to, a strong genetic search. An ablation pinpoints the mechanism: it is the sustained pull of the AI prior on the probabilistic qubit state, not a one shot warm-start, that drives the gain. The same prior also warm-starts a simulated QAOA, so the loop is quantum ready rather than merely quantum themed. We see the framework as a practical and honest path toward IoT networks that heal themselves, and as a bridge to the quantum optimizers to come.
 
 \begin{thebibliography}{15}
 \bibitem{ref1} A. Al-Fuqaha \textit{et al.}, ``Internet of Things: A survey on enabling technologies, protocols, and applications,'' \textit{IEEE Commun. Surveys Tuts.}, vol. 17, no. 4, pp. 2347--2376, 2015.
