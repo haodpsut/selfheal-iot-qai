@@ -11,6 +11,10 @@ local smoke test and 30 on the RTX 4090:
 from __future__ import annotations
 import sys
 import os
+# Pin BLAS to one thread per process BEFORE numpy is imported: with multiprocessing workers,
+# multi-threaded eigensolves otherwise oversubscribe the cores and thrash. Must precede numpy.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
 import numpy as np
 
 from qio import optimize, QIEAConfig
