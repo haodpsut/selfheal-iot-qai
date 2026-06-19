@@ -22,30 +22,31 @@ HERE = os.path.dirname(__file__)
 CSV = os.path.join(HERE, "..", "..", "results", "cs2", "cs2_results.csv")
 OUT = os.path.join(HERE, "..", "..", "results", "cs2", "fig_cs2.png")
 
-ORDER = ["greedy", "GA", "QIEA-noAI", "QIEA+AI"]
-COLORS = {"greedy": "#b0b0b0", "GA": "#6fae6f", "QIEA-noAI": "#e0a05a", "QIEA+AI": "#c0392b"}
+ORDER = ["greedy", "greedy-conn", "GA", "SA", "QIEA-noAI", "QIEA+AI"]
+COLORS = {"greedy": "#b0b0b0", "greedy-conn": "#8aa0c0", "GA": "#6fae6f",
+          "SA": "#9b72c7", "QIEA-noAI": "#e0a05a", "QIEA+AI": "#c0392b"}
 
 
 def main():
     data = defaultdict(list)
     with open(CSV) as f:
         for row in csv.DictReader(f):
-            data[row["method"]].append(float(row["served"]))
+            data[row["method"]].append(float(row["gw_survivable"]))
 
     methods = [m for m in ORDER if m in data]
     mean = [np.mean(data[m]) for m in methods]
     std = [np.std(data[m]) for m in methods]
     cols = [COLORS[m] for m in methods]
 
-    fig, ax = plt.subplots(figsize=(5.2, 3.6))
+    fig, ax = plt.subplots(figsize=(5.6, 3.6))
     bars = ax.bar(methods, mean, yerr=std, color=cols, capsize=3,
                   edgecolor="black", linewidth=0.5)
     for b, v in zip(bars, mean):
         ax.text(b.get_x() + b.get_width() / 2, b.get_height(), f"{v:.2f}",
                 ha="center", va="bottom", fontsize=8)
-    ax.set_ylabel("served-demand fraction")
-    ax.set_ylim(0, 0.85)
-    ax.set_title("CS2: reallocation under a jamming surge")
+    ax.set_ylabel("device-to-gateway survivable fraction")
+    ax.set_ylim(0, 1.12)
+    ax.set_title("CS2: restoring gateway reachability under link jamming")
     ax.tick_params(axis="x", rotation=15)
     ax.grid(axis="y", alpha=0.25, linestyle=":")
     ax.set_axisbelow(True)

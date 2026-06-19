@@ -21,9 +21,9 @@ HERE = os.path.dirname(__file__)
 CSV = os.path.join(HERE, "..", "..", "results", "cs1", "cs1_results.csv")
 OUT = os.path.join(HERE, "..", "..", "results", "cs1", "fig_cs1.png")
 
-ORDER = ["greedy", "greedy-conn", "GA", "QIEA-noAI", "QIEA+AI"]
+ORDER = ["greedy", "greedy-conn", "GA", "SA", "QIEA-noAI", "QIEA+AI"]
 COLORS = {"greedy": "#b0b0b0", "greedy-conn": "#8aa0c0", "GA": "#6fae6f",
-          "QIEA-noAI": "#e0a05a", "QIEA+AI": "#c0392b"}
+          "SA": "#9b72c7", "QIEA-noAI": "#e0a05a", "QIEA+AI": "#c0392b"}
 
 
 def load():

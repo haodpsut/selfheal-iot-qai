@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(__file__)
 QUALITY = {"cs1": ("survivable", "survivable fraction"),
-           "cs2": ("served", "served-demand fraction")}
+           "cs2": ("gw_survivable", "device-to-gateway survivable fraction")}
 COLORS = {"QIEA-noAI": "#e0a05a", "QIEA+AI": "#c0392b"}
 
 
