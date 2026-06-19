@@ -22,3 +22,5 @@ results/**/*.png
 # paper build images / logs
 paper/*.png
 paper/build*.log
+
+cover_letter.pdf
